@@ -23,6 +23,7 @@ const SETTINGS = Object.freeze({
   interviewerKey: "SELETIVO_ENTREVISTADORES",
   formsResponsesKey: "SELETIVO_INSCRICAO",
 
+  privateLogSheetName: "Reservas",
   // Registry keys (GEAPA-CORE vai resolver para {id, sheet})
  // registryKeys: SELETIVO_REGISTRY_KEYS,
 

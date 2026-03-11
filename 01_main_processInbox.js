@@ -50,10 +50,9 @@ function processInboxReplies() {
     // Log (Reservas)
     const logKey = mustKey_("privateLogKey", SETTINGS.privateLogKey);
     console.log("privateLogKey =", logKey);
-    const logRef = GEAPA_CORE.coreGetRegistryRefByKey(SETTINGS.privateLogKey); // {id, sheet}
- //   const logRef = GEAPA_CORE.coreGetRegistryRefByKey(logKey); // {id, sheet}
+    const logRef = GEAPA_CORE.coreGetRegistryRefByKey(SETTINGS.privateLogKey);
     const ssLog  = GEAPA_CORE.coreOpenSpreadsheetById(logRef.id);
-    const shLog  = ensureLogSheet_(ssLog);
+    const shLog  = ensureLogSheet_(ssLog, logRef.sheet || SETTINGS.privateLogSheetName);
 
     // log (reservas) — mantém ensureLogSheet_ (ele espera Spreadsheet)
     
