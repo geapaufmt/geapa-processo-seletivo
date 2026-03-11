@@ -1,0 +1,15 @@
+{
+  "timeZone": "America/Cuiaba",
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "dependencies": {
+    "libraries": [
+      {
+        "userSymbol": "GEAPA_CORE",
+        "libraryId": "1S0QTDZld2v9X-nNeDVWgnoBsemK5iw3PA409hb40EN7USS9Ow1X9mdqj",
+        "version": "0",
+        "developmentMode": true
+      }
+    ]
+  }
+}
