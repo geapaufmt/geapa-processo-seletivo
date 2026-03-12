@@ -198,12 +198,15 @@ function handleInterviewThread_(thread, shPublic, shLog, labelInbox, labelProces
   });
 
   // E-mail de confirmação
+  const contatosSecretariaHtml = getSecretaryContactsHtml_();
+
   const confirmHtml = fill_(SETTINGS.confirmHtml, {
     NOME: fromName,
     CODIGO: code20,
     DIA: dayName || "—",
     FAIXA: timeRange || "—",
-    SEMANA: weekTitle || "—"
+    SEMANA: weekTitle || "—",
+    CONTATOS_SECRETARIA: contatosSecretariaHtml
   });
   reply_(thread, SETTINGS.confirmSubject, confirmHtml);
 

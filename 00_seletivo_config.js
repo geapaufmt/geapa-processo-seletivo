@@ -17,7 +17,7 @@ const SETTINGS = Object.freeze({
   inboxLabel: "Entrevistas/Respostas",
   processedLabel: "Entrevistas/Processados",
   errorLabel: "Entrevistas/Erros",
-
+ 
   publicScheduleKey: "SELETIVO_AGENDAMENTO",
   privateLogKey: "SELETIVO_RESERVAS",
   interviewerKey: "SELETIVO_ENTREVISTADORES",
@@ -61,8 +61,8 @@ const SETTINGS = Object.freeze({
   confirmHtml: `
     <p>Olá, <b>{{NOME}}</b>!</p>
     <p>Seu horário <b>{{CODIGO}}</b> foi <b>confirmado</b> para <b>{{DIA}}</b> – <b>{{FAIXA}}</b> ({{SEMANA}}).</p>
-    <p>Qualquer imprevisto, nos envie um email, ou entre em contato com um dos número abaixo:</p>
-    <p><b>Gabriela: 66 99614-5270<br>Matheus: 99 99137-8278<b></p>
+    <p>Qualquer imprevisto, nos envie um email ou entre em contato com um dos secretários abaixo:</p>
+    <p>{{CONTATOS_SECRETARIA}}</p>
     <p>Até breve!<br>Equipe de Seleção</p>
   `,
 
