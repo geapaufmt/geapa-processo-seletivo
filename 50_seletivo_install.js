@@ -5,8 +5,9 @@
 
 // Handlers desta versão
 const SELETIVO_TRIGGERS = Object.freeze([
-  { fn: 'processInboxReplies', minutes: 5 },                 // processa inbox
-  { fn: 'refreshVisualizationFromInterviewers', minutes: 10 } // atualiza grade (ajuste se quiser)
+  { fn: 'processInboxReplies', minutes: 5 },
+  { fn: 'refreshVisualizationFromInterviewers', minutes: 10 },
+  { fn: 'seletivo_updateCurrentSemesterColumn', minutes: 10 }
 ]);
 
 function seletivo_installTriggers() {
