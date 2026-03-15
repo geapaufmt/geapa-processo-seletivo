@@ -115,14 +115,18 @@ function handleInterviewThread_(thread, shPublic, shLog, labelInbox, labelProces
   }
 
   // Lê capacidade = nº de duplas completas no bloco
-  const interviewerPairs = getInterviewersPairsForBlock_(
-    SETTINGS.interviewerSpreadsheetId,
-    SETTINGS.interviewerSheetName,
-    SETTINGS.interviewerCodeHeader,
-    SETTINGS.interviewerRgaHeaders,
-    agg
-  );
-  const capacity = interviewerPairs.length;
+  const interviewerData = getInterviewersPairsForBlock_(agg);
+
+  // nomes para exibição no log
+  const interviewerNames = interviewerData.map(p => [p.nome1, p.nome2]);
+
+  const nomeEntrevistadorResponsavel =
+    interviewerData.length ? String(interviewerData[0].nome1 || "").trim() : "";
+
+  const rgaEntrevistadorResponsavel =
+    interviewerData.length ? String(interviewerData[0].rga1 || "").trim() : "";
+
+  const capacity = interviewerData.length;
   if (capacity === 0) {
     reply_(thread, SETTINGS.denySubject, fill_(SETTINGS.denyHtml, { NOME: fromName, CODIGO: code20 }));
     mark_(thread, labelInbox, labelProcessed);
@@ -192,7 +196,9 @@ function handleInterviewThread_(thread, shPublic, shLog, labelInbox, labelProces
     fromName,
     fromEmail,
     rgaCandidato,
-    interviewerPairs,
+    interviewerNames,
+    nomeEntrevistadorResponsavel,
+    rgaEntrevistadorResponsavel,
     threadId: thread.getId(),
     messageId: msg.getId()
   });

@@ -63,29 +63,28 @@ function refreshVisualizationFromInterviewers() {
 }
 
 function getActiveBlocks_() {
-  // Sheet entrevistadores via Registry
   const sh = GEAPA_CORE.coreGetSheetByKey(SETTINGS.interviewerKey);
   if (!sh) return [];
 
   const data = sh.getDataRange().getValues();
+  if (!data.length) return [];
+
   const header = data.shift();
-  if (!header) return [];
 
   const codeIdx = header.indexOf(SETTINGS.interviewerCodeHeader);
-  const rgaIdxs = SETTINGS.interviewerRgaHeaders.map(h => header.indexOf(h));
-  if (codeIdx < 0 || rgaIdxs.some(i => i < 0)) return [];
+  const nameIdxs = SETTINGS.interviewerNameHeaders.map(h => header.indexOf(h));
+
+  if (codeIdx < 0 || nameIdxs.some(i => i < 0)) return [];
 
   const actives = new Set();
+
   for (const row of data) {
     const code = String(row[codeIdx] || "").toUpperCase().trim();
     if (!code) continue;
 
-    const rgas = rgaIdxs
-      .map(i => String(row[i] || "").trim())
-      .filter(Boolean);
-
-    // bloco ativo = pelo menos 1 dupla completa
-    if (rgas.length >= 2) actives.add(code);
+    const names = nameIdxs.map(i => String(row[i] || "").trim()).filter(Boolean);
+    if (names.length >= 2) actives.add(code);
   }
+
   return Array.from(actives);
 }

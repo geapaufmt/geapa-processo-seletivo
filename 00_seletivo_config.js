@@ -17,24 +17,26 @@ const SETTINGS = Object.freeze({
   inboxLabel: "Entrevistas/Respostas",
   processedLabel: "Entrevistas/Processados",
   errorLabel: "Entrevistas/Erros",
- 
+
   publicScheduleKey: "SELETIVO_AGENDAMENTO",
   privateLogKey: "SELETIVO_RESERVAS",
   interviewerKey: "SELETIVO_ENTREVISTADORES",
+  interviewerListKey: "SELETIVO_LISTA_ENTREVISTADORES",
   formsResponsesKey: "SELETIVO_INSCRICAO",
 
-  privateLogSheetName: "Reservas",
-  // Registry keys (GEAPA-CORE vai resolver para {id, sheet})
- // registryKeys: SELETIVO_REGISTRY_KEYS,
-
-  // Aba/colunas (iguais ao original)
   interviewerCodeHeader: "Código",
-  interviewerRgaHeaders: ["RGA1", "RGA2"],
+  interviewerNameHeaders: ["Nome1", "Nome2"],
+  interviewerListNameHeader: "Nome",
+  interviewerListRgaHeader: "RGA",
 
   formsRgaHeader: "RGA",
 
-  verifiedStatusValue: "Verificado",       // valor que libera a confirmação
-  verificationStatusHeader: "Verificação", // NOME exato da coluna na planilha do Forms
+  verifiedStatusValue: "Verificado",
+  verificationStatusHeader: "Verificação",
+
+  // NOVOS
+  emailStatusHeader: "Status E-mail",
+  postVerificationNoteHeader: "Observações (verificação)",
 
   verificationSubject: "Aguardando verificação do cadastro",
   verificationHtml: `
@@ -42,6 +44,17 @@ const SETTINGS = Object.freeze({
     <p>Recebemos seu código <b>{{CODIGO}}</b>, mas seu cadastro ainda está em <b>verificação</b>.</p>
     <p>Assim que concluirmos a triagem e seu status for <b>Verificado</b>, você poderá confirmar o horário.</p>
     <p>Se já regularizou, aguarde alguns minutos e tente novamente, ou aguarde até enviarmos outro email de agendamento.</p>
+  `,
+
+  // NOVOS
+  inviteSubject: "Agendamento de entrevista – Processo Seletivo GEAPA",
+  inviteHtml: `
+    <p>Olá, <b>{{NOME}}</b>!</p>
+    <p>Seu cadastro no processo seletivo do GEAPA foi <b>verificado</b>.</p>
+    <p>Agora você já pode confirmar seu horário de entrevista respondendo este e-mail com o <b>código do horário desejado</b>.</p>
+    <p>Você pode consultar a planilha de horários neste link:</p>
+    <p><a href="{{LINK_PLANILHA}}">{{LINK_PLANILHA}}</a></p>
+    <p>Atenciosamente,<br>Equipe de Seleção</p>
   `,
 
   // Regras de mapeamento por dia (coluna da grade -> prefixo do bloco)
