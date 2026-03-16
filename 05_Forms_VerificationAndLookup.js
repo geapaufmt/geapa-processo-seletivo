@@ -119,3 +119,152 @@ function getSheetByIdAndName_(sheetId, sheetName) {
   if (!sheetId || !sheetName) return null;
   return GEAPA_CORE.coreGetSheetById(sheetId, sheetName);
 }
+
+/***************************************
+ * Sync Inscrição verificada -> Avaliação
+ ***************************************/
+
+/**
+ * Sincroniza UMA linha da planilha de inscrição para a Avaliação,
+ * mas somente se o status de verificação estiver como "Verificado".
+ */
+function seletivo_syncInscricaoVerificadaParaAvaliacaoByRow_(rowNumber) {
+  try {
+    const inscricaoObj = seletivo_getInscricaoObjByRow_(rowNumber);
+    if (!inscricaoObj) {
+      Logger.log('seletivo_syncInscricaoVerificadaParaAvaliacaoByRow_: linha inválida ' + rowNumber);
+      return false;
+    }
+
+    if (!seletivo_isInscricaoVerificada_(inscricaoObj)) {
+      Logger.log('Linha ' + rowNumber + ' ainda não está verificada. Nada enviado para Avaliação.');
+      return false;
+    }
+
+    const res = seletivo_upsertAvaliacaoFromInscricao_(inscricaoObj);
+    Logger.log('Sync inscrição -> Avaliação concluído. Linha ' + rowNumber + ' | ação=' + JSON.stringify(res));
+    return true;
+  } catch (e) {
+    console.error('seletivo_syncInscricaoVerificadaParaAvaliacaoByRow_ erro:', e);
+    return false;
+  }
+}
+
+/**
+ * Sincroniza TODAS as inscrições verificadas para a Avaliação.
+ * Útil para rodar manualmente e corrigir/repovoar.
+ */
+function seletivo_syncAllInscricoesVerificadasParaAvaliacao_() {
+  try {
+    const sh = getFormsResponsesSheet_();
+    if (!sh) {
+      throw new Error('Planilha de respostas do Forms não encontrada.');
+    }
+
+    const lastRow = sh.getLastRow();
+    const lastCol = sh.getLastColumn();
+    if (lastRow < 2) {
+      Logger.log('Nenhuma resposta de inscrição encontrada.');
+      return { total: 0, verificadas: 0, sincronizadas: 0 };
+    }
+
+    const headers = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h || '').trim());
+    const values = sh.getRange(2, 1, lastRow - 1, lastCol).getValues();
+
+    let verificadas = 0;
+    let sincronizadas = 0;
+
+    for (let i = 0; i < values.length; i++) {
+      const rowObj = seletivo_rowArrayToObject_(headers, values[i]);
+      if (!seletivo_isInscricaoVerificada_(rowObj)) continue;
+
+      verificadas++;
+      const ok = seletivo_upsertAvaliacaoFromInscricao_(rowObj);
+      if (ok) sincronizadas++;
+    }
+
+    const resumo = {
+      total: values.length,
+      verificadas: verificadas,
+      sincronizadas: sincronizadas
+    };
+
+    Logger.log('seletivo_syncAllInscricoesVerificadasParaAvaliacao_ -> ' + JSON.stringify(resumo));
+    return resumo;
+  } catch (e) {
+    console.error('seletivo_syncAllInscricoesVerificadasParaAvaliacao_ erro:', e);
+    return { error: String(e) };
+  }
+}
+
+/**
+ * Lê uma linha específica da planilha do Forms e devolve como objeto.
+ */
+function seletivo_getInscricaoObjByRow_(rowNumber) {
+  const sh = getFormsResponsesSheet_();
+  Logger.log('seletivo_getInscricaoObjByRow_: sh=' + sh);
+  Logger.log('seletivo_getInscricaoObjByRow_: rowNumber=' + rowNumber);
+
+  if (!sh) {
+    throw new Error('Planilha de respostas do Forms não encontrada.');
+  }
+
+  const lastCol = sh.getLastColumn();
+  Logger.log('seletivo_getInscricaoObjByRow_: lastCol=' + lastCol);
+
+  if (rowNumber < 2 || rowNumber > sh.getLastRow()) {
+    Logger.log('seletivo_getInscricaoObjByRow_: rowNumber fora do intervalo.');
+    return null;
+  }
+
+  const headers = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h || '').trim());
+  const row = sh.getRange(rowNumber, 1, 1, lastCol).getValues()[0];
+
+  return seletivo_rowArrayToObject_(headers, row);
+}
+
+/**
+ * Diz se a inscrição está marcada como verificada.
+ * Usa SETTINGS.verificationStatusHeader e SETTINGS.verifiedStatusValue,
+ * mantendo compatibilidade com a config que você já usa.
+ */
+function seletivo_isInscricaoVerificada_(inscricaoObj) {
+  if (!inscricaoObj) return false;
+
+  const statusHeader = String(SETTINGS.verificationStatusHeader || '').trim();
+  const verifiedValue = String(SETTINGS.verifiedStatusValue || 'Verificado').trim().toLowerCase();
+
+  if (!statusHeader) return false;
+
+  const statusAtual = String(inscricaoObj[statusHeader] || '').trim().toLowerCase();
+  return statusAtual === verifiedValue;
+}
+
+/**
+ * Helper simples: converte linha array em objeto usando os headers.
+ */
+function seletivo_rowArrayToObject_(headers, row) {
+  const obj = {};
+  for (let i = 0; i < headers.length; i++) {
+    obj[headers[i]] = row[i];
+  }
+  return obj;
+}
+
+/**
+ * Semestre atual do seletivo.
+ * Se você já tiver uma função melhor no 11_Forms_CurrentSemester.gs,
+ * pode trocar a implementação daqui para chamá-la.
+ */
+function seletivo_getSemestreSeletivoAtual_() {
+  try {
+    const hoje = new Date();
+    const ano = hoje.getFullYear();
+    const mes = hoje.getMonth() + 1;
+    const periodo = mes <= 6 ? '1' : '2';
+    return ano + '/' + periodo;
+  } catch (e) {
+    console.error('seletivo_getSemestreSeletivoAtual_ erro:', e);
+    return '';
+  }
+}

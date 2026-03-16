@@ -10,15 +10,12 @@
  ***************************************/
 
 function processInboxReplies() {
-  // ⚠️ Lock via Library não funciona com callback (limitação do Apps Script Libraries),
-  // então aqui mantém LockService local mesmo.
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return;
 
   try {
-    requeueFollowUps_(); // 04_Gmail_FollowUps.gs
+    requeueFollowUps_();
 
-    // Labels via Core (garante e pega)
     GEAPA_CORE.coreEnsureLabel(SETTINGS.inboxLabel);
     GEAPA_CORE.coreEnsureLabel(SETTINGS.processedLabel);
     GEAPA_CORE.coreEnsureLabel(SETTINGS.errorLabel);
@@ -27,42 +24,38 @@ function processInboxReplies() {
     const labelProcessed = GEAPA_CORE.coreGetLabel(SETTINGS.processedLabel);
     const labelError     = GEAPA_CORE.coreGetLabel(SETTINGS.errorLabel);
 
-    // Se por algum motivo labelInbox não existir, aborta
-    if (!labelInbox) return;
+    if (!labelInbox) {
+      Logger.log('processInboxReplies: labelInbox não encontrada.');
+      return;
+    }
 
     const threads = labelInbox.getThreads(0, 30);
+    Logger.log('processInboxReplies: threads encontrados na label inbox = ' + threads.length);
+
     if (!threads.length) return;
 
-    // Sheets via Registry (Planilha Geral)
-    // público (horários)
-    // ===== DEBUG + HARD ASSERT =====
     function mustKey_(name, value) {
       const k = String(value ?? "").trim();
       if (!k) throw new Error(`SETTINGS.${name} está vazio/undefined`);
       return k;
     }
 
-    // Público (Horários)
     const publicKey = mustKey_("publicScheduleKey", SETTINGS.publicScheduleKey);
-    console.log("publicScheduleKey =", publicKey);
+    Logger.log("processInboxReplies: publicScheduleKey = " + publicKey);
     const shPublic = GEAPA_CORE.coreGetSheetByKey(publicKey);
 
-    // Log (Reservas)
     const logKey = mustKey_("privateLogKey", SETTINGS.privateLogKey);
-    console.log("privateLogKey =", logKey);
+    Logger.log("processInboxReplies: privateLogKey = " + logKey);
     const logRef = GEAPA_CORE.coreGetRegistryRefByKey(SETTINGS.privateLogKey);
     const ssLog  = GEAPA_CORE.coreOpenSpreadsheetById(logRef.id);
     const shLog  = ensureLogSheet_(ssLog, logRef.sheet || SETTINGS.privateLogSheetName);
 
-    // log (reservas) — mantém ensureLogSheet_ (ele espera Spreadsheet)
-    
-//    const ssLog  = GEAPA_CORE.coreOpenSpreadsheetById(logRef.id);
-//    const shLog  = ensureLogSheet_(ssLog);
-
     for (const thread of threads) {
       try {
+        Logger.log('processInboxReplies: processando threadId=' + thread.getId() + ' | assunto=' + thread.getFirstMessageSubject());
         handleInterviewThread_(thread, shPublic, shLog, labelInbox, labelProcessed);
       } catch (err) {
+        Logger.log('processInboxReplies: erro no threadId=' + thread.getId() + ' -> ' + err);
         handleInterviewThreadError_(thread, err, labelInbox, labelError);
       }
     }
@@ -72,22 +65,41 @@ function processInboxReplies() {
 }
 
 function handleInterviewThread_(thread, shPublic, shLog, labelInbox, labelProcessed) {
-  const msg = thread.getMessages().pop();
-  const fromEmail = extractEmail_(msg.getFrom());
-  const fromName  = extractName_(msg.getFrom()) || "candidato(a)";
+  const msgs = thread.getMessages();
+  Logger.log('handleInterviewThread_: threadId=' + thread.getId() + ' | totalMsgs=' + msgs.length);
 
-  const body = (msg.getPlainBody() || "") + "\n" + (msg.getBody() || "");
+  const msg = msgs.pop();
+  const fromRaw = msg.getFrom();
+  const fromEmail = extractEmail_(fromRaw);
+  const fromName  = extractName_(fromRaw) || "candidato(a)";
+
+  Logger.log('handleInterviewThread_: última mensagem from=' + fromRaw);
+  Logger.log('handleInterviewThread_: fromEmail=' + fromEmail + ' | fromName=' + fromName);
+
+  const plain = msg.getPlainBody() || "";
+  const html  = msg.getBody() || "";
+  const body = plain + "\n" + html;
+
+  Logger.log('handleInterviewThread_: plainBody=' + plain);
+  Logger.log('handleInterviewThread_: codeRegex=' + SETTINGS.codeRegex);
+
   const m = body.toUpperCase().match(SETTINGS.codeRegex);
   const code20 = m ? m[1].toUpperCase() : "";
 
+  Logger.log('handleInterviewThread_: código detectado=' + code20);
+
   if (!code20) {
+    Logger.log('handleInterviewThread_: nenhum código encontrado, enviando deny.');
     reply_(thread, SETTINGS.denySubject, fill_(SETTINGS.denyHtml, { NOME: fromName, CODIGO: "—" }));
     mark_(thread, labelInbox, labelProcessed);
     return;
   }
 
   const pos = parseCodeToPos_(code20);
+  Logger.log('handleInterviewThread_: pos=' + JSON.stringify(pos));
+
   if (!pos) {
+    Logger.log('handleInterviewThread_: parseCodeToPos_ não reconheceu código.');
     reply_(thread, SETTINGS.denySubject, fill_(SETTINGS.denyHtml, { NOME: fromName, CODIGO: code20 }));
     mark_(thread, labelInbox, labelProcessed);
     return;
@@ -97,27 +109,32 @@ function handleInterviewThread_(thread, shPublic, shLog, labelInbox, labelProces
   const cell = shPublic.getRange(row, col);
   const current = String(cell.getDisplayValue()).trim();
 
+  Logger.log('handleInterviewThread_: célula pública atual=' + current);
+
   const isRawCode  = current.toUpperCase() === code20;
   const isAgendado = isAgendadoText_(current);
 
-  // Infos auxiliares
+  Logger.log('handleInterviewThread_: isRawCode=' + isRawCode + ' | isAgendado=' + isAgendado);
+
   const weekTitle = shPublic.getRange(1,1).getDisplayValue();
   const dayName   = shPublic.getRange(1, col).getDisplayValue();
   const timeRange = shPublic.getRange(row, 1).getDisplayValue();
 
-  // Mapeia para bloco de 1h
   const dayColLetter = colIndexToLetters_(col);
   const agg = computeAggregateCode_(dayColLetter, row, SETTINGS);
+
+  Logger.log('handleInterviewThread_: agg=' + agg);
+
   if (!agg) {
+    Logger.log('handleInterviewThread_: agg vazio.');
     reply_(thread, SETTINGS.denySubject, fill_(SETTINGS.denyHtml, { NOME: fromName, CODIGO: code20 }));
     mark_(thread, labelInbox, labelProcessed);
     return;
   }
 
-  // Lê capacidade = nº de duplas completas no bloco
   const interviewerData = getInterviewersPairsForBlock_(agg);
+  Logger.log('handleInterviewThread_: interviewerData.length=' + interviewerData.length);
 
-  // nomes para exibição no log
   const interviewerNames = interviewerData.map(p => [p.nome1, p.nome2]);
 
   const nomeEntrevistadorResponsavel =
@@ -128,31 +145,33 @@ function handleInterviewThread_(thread, shPublic, shLog, labelInbox, labelProces
 
   const capacity = interviewerData.length;
   if (capacity === 0) {
+    Logger.log('handleInterviewThread_: capacity=0, negando.');
     reply_(thread, SETTINGS.denySubject, fill_(SETTINGS.denyHtml, { NOME: fromName, CODIGO: code20 }));
     mark_(thread, labelInbox, labelProcessed);
     return;
   }
 
-  // Disponibilidade objetiva
   if (!isRawCode && !isAgendado) {
+    Logger.log('handleInterviewThread_: célula não está disponível para esse código.');
     reply_(thread, SETTINGS.denySubject, fill_(SETTINGS.denyHtml, { NOME: fromName, CODIGO: code20 }));
     mark_(thread, labelInbox, labelProcessed);
     return;
   }
 
-  // Sincroniza contadores (log vs célula)
   const bookedInLog = countBookings_(shLog, weekTitle, code20);
   const parsed = parseAgendadoCounter_(current);
   const displayBooked = parsed ? parsed.booked : (isAgendado ? capacity : 0);
   const effectiveBooked = Math.max(bookedInLog, displayBooked);
 
+  Logger.log('handleInterviewThread_: bookedInLog=' + bookedInLog + ' | displayBooked=' + displayBooked + ' | effectiveBooked=' + effectiveBooked + ' | capacity=' + capacity);
+
   if (effectiveBooked >= capacity) {
+    Logger.log('handleInterviewThread_: slot lotado.');
     reply_(thread, SETTINGS.denySubject, fill_(SETTINGS.denyHtml, { NOME: fromName, CODIGO: code20 }));
     mark_(thread, labelInbox, labelProcessed);
     return;
   }
 
-  // Busca RGA do candidato
   const rgaCandidato = fetchRGAByEmail_(
     SETTINGS.formsResponsesSpreadsheetId,
     SETTINGS.formsResponsesSheetName,
@@ -160,14 +179,18 @@ function handleInterviewThread_(thread, shPublic, shLog, labelInbox, labelProces
     fromEmail
   ) || "";
 
-  if (!isVerifiedByEmail_UsingForms_(fromEmail)) {
+  Logger.log('handleInterviewThread_: rgaCandidato=' + rgaCandidato);
+
+  const verified = isVerifiedByEmail_UsingForms_(fromEmail);
+  Logger.log('handleInterviewThread_: verified=' + verified);
+
+  if (!verified) {
     const html = fill_(SETTINGS.verificationHtml, { NOME: fromName, CODIGO: code20 });
     reply_(thread, SETTINGS.verificationSubject, html);
     mark_(thread, labelInbox, labelProcessed);
     return;
   }
 
-  // CONFIRMA: monta display — mostra código enquanto houver vaga; some quando lotado
   const newBooked = effectiveBooked + 1;
   let display;
   if (capacity > 1) {
@@ -178,13 +201,13 @@ function handleInterviewThread_(thread, shPublic, shLog, labelInbox, labelProces
     display = SETTINGS.reservedTextPublic;
   }
 
+  Logger.log('handleInterviewThread_: novo display=' + display);
+
   cell.setValue(display);
 
-  // pinta vermelho quando lota
   const isFull = (capacity === 1) || (newBooked >= capacity);
   cell.setBackground(isFull ? "#f4c7c3" : null);
 
-  // LOG
   appendLogRow_(shLog, {
     weekTitle,
     dayName,
@@ -203,8 +226,10 @@ function handleInterviewThread_(thread, shPublic, shLog, labelInbox, labelProces
     messageId: msg.getId()
   });
 
-  // E-mail de confirmação
   const contatosSecretariaHtml = getSecretaryContactsHtml_();
+
+  const localEntrevista =
+    seletivo_getLocalEntrevistaByRgaOrEmail_(rgaCandidato, fromEmail) || 'A definir';
 
   const confirmHtml = fill_(SETTINGS.confirmHtml, {
     NOME: fromName,
@@ -212,11 +237,15 @@ function handleInterviewThread_(thread, shPublic, shLog, labelInbox, labelProces
     DIA: dayName || "—",
     FAIXA: timeRange || "—",
     SEMANA: weekTitle || "—",
+    LOCAL_ENTREVISTA: localEntrevista,
     CONTATOS_SECRETARIA: contatosSecretariaHtml
   });
+
+  Logger.log('handleInterviewThread_: enviando confirmação.');
   reply_(thread, SETTINGS.confirmSubject, confirmHtml);
 
   mark_(thread, labelInbox, labelProcessed);
+  Logger.log('handleInterviewThread_: thread marcado como processado.');
 }
 
 function handleInterviewThreadError_(thread, err, labelInbox, labelError) {

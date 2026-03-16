@@ -74,6 +74,7 @@ const SETTINGS = Object.freeze({
   confirmHtml: `
     <p>Olá, <b>{{NOME}}</b>!</p>
     <p>Seu horário <b>{{CODIGO}}</b> foi <b>confirmado</b> para <b>{{DIA}}</b> – <b>{{FAIXA}}</b> ({{SEMANA}}).</p>
+    <p><b>Local da entrevista:</b> {{LOCAL_ENTREVISTA}}</p>
     <p>Qualquer imprevisto, nos envie um email ou entre em contato com um dos secretários abaixo:</p>
     <p>{{CONTATOS_SECRETARIA}}</p>
     <p>Até breve!<br>Equipe de Seleção</p>
