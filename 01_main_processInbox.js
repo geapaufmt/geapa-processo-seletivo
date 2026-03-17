@@ -68,7 +68,28 @@ function handleInterviewThread_(thread, shPublic, shLog, labelInbox, labelProces
   const msgs = thread.getMessages();
   Logger.log('handleInterviewThread_: threadId=' + thread.getId() + ' | totalMsgs=' + msgs.length);
 
-  const msg = msgs.pop();
+  const myEmails = [Session.getActiveUser().getEmail(), ...GmailApp.getAliases()]
+    .map(e => String(e || '').toLowerCase());
+
+  function isFromMe_(from) {
+    const f = String(from || '').toLowerCase();
+    return myEmails.some(me => me && f.includes(me));
+  }
+
+  // pega a última mensagem que NÃO é do próprio GEAPA
+  let msg = null;
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (!isFromMe_(msgs[i].getFrom())) {
+      msg = msgs[i];
+      break;
+    }
+  }
+
+  if (!msg) {
+    Logger.log('handleInterviewThread_: nenhuma resposta externa no thread ' + thread.getId() + '. Ignorando.');
+    return;
+  }
+
   const fromRaw = msg.getFrom();
   const fromEmail = extractEmail_(fromRaw);
   const fromName  = extractName_(fromRaw) || "candidato(a)";
@@ -80,6 +101,7 @@ function handleInterviewThread_(thread, shPublic, shLog, labelInbox, labelProces
   const html  = msg.getBody() || "";
   const body = plain + "\n" + html;
 
+  Logger.log('handleInterviewThread_: processando mensagem externa de ' + fromEmail);
   Logger.log('handleInterviewThread_: plainBody=' + plain);
   Logger.log('handleInterviewThread_: codeRegex=' + SETTINGS.codeRegex);
 
