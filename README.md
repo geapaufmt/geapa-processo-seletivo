@@ -1,434 +1,409 @@
 # GEAPA – Processo Seletivo (Automação)
 
-Este módulo automatiza o **processo seletivo do GEAPA**, gerenciando:
-
-- verificação de inscrições
-- envio automático de convites
-- agendamento de entrevistas por código
-- controle de disponibilidade de horários
-- registro das entrevistas no log
-- identificação de entrevistadores responsáveis
-- integração futura com a planilha de avaliação dos candidatos
+Este módulo automatiza o **processo seletivo do GEAPA**, cobrindo desde a verificação da inscrição até o acompanhamento da entrevista e o encaminhamento pós-entrevista.
 
 O sistema foi desenvolvido em **Google Apps Script**, com integração ao **GEAPA-CORE** e versionamento via **GitHub + CLASP**.
 
 ---
 
-# Arquitetura do sistema
+# Visão geral do que o módulo faz
+
+O módulo atualmente é responsável por:
+
+- verificação manual de inscrições
+- sincronização de candidatos verificados para a planilha de avaliação
+- envio automático de e-mail inicial para escolha de horário
+- leitura de respostas por e-mail com código de agendamento
+- validação de disponibilidade dos horários
+- reserva do horário na planilha pública
+- registro da entrevista no log privado
+- identificação automática dos entrevistadores do bloco
+- envio de e-mail de confirmação ao candidato
+- envio de consulta de presença ao entrevistador responsável
+- processamento da resposta do entrevistador (`SIM` / `NAO`)
+- atualização da planilha de avaliação
+- envio de e-mail ao candidato após a entrevista
+- suporte a remarcação antecipada com reaproveitamento do fluxo de agendamento
+
+---
+
+# Arquitetura geral
 
 O módulo funciona em conjunto com:
 
-- Google Sheets  
-- Gmail  
+- Google Sheets
+- Gmail
 - GEAPA-CORE (Library)
 
-Fluxo geral do sistema:
+Fluxo geral:
 
-```
-Candidato → Planilha de Inscrição
-           → Verificação manual
-           → Envio automático de e-mail
-           → Candidato responde com código
-           → Sistema processa inbox
-           → Reserva horário de entrevista
-           → Registro na planilha de log
-           → Processo de avaliação posterior
+```text
+Candidato
+→ Formulário de inscrição
+→ Planilha de inscrição
+→ Verificação manual
+→ Sync para planilha de avaliação
+→ E-mail inicial de agendamento
+→ Resposta com código
+→ Processamento do inbox
+→ Reserva de horário
+→ Registro no log
+→ Entrevista
+→ Confirmação de presença pelo entrevistador
+→ Atualização da avaliação
+→ Encaminhamento do candidato
 ```
 
 ---
 
-# Estrutura das Planilhas
+# Planilhas utilizadas
 
-O sistema utiliza várias planilhas com funções específicas.
+O módulo utiliza as seguintes planilhas/abas via Registry do GEAPA-CORE.
 
----
+## 1. SELETIVO_INSCRICAO
 
-# 1. Planilha de Inscrição
+Planilha de respostas do formulário de inscrição.
 
-Contém os dados enviados pelo formulário de inscrição.
+Contém os dados completos do candidato, incluindo:
 
-Campos principais:
-
-- Nome
-- Email
+- Nome Completo
+- Email principal
+- Telefone
+- Data de nascimento
 - RGA
-- Semestre
+- CPF
+- Sexo
+- Semestre atual
+- Naturalidade
 - Experiências acadêmicas
 - CR
-- Verificado
+- Status de verificação
 
-Quando **Verificado = TRUE**, o sistema:
-
-1. envia o e-mail de convite para agendamento  
-2. inicia o fluxo de entrevistas
+Essa planilha é a base de origem dos dados do candidato.
 
 ---
 
-# 2. Planilha Pública de Agendamento
+## 2. SELETIVO_AVALIACAO
 
-Contém os horários disponíveis para entrevista.
+Planilha de avaliação dos candidatos.
 
-Cada slot possui:
+É usada para:
 
-- Semana
-- Dia
-- Faixa de horário
-- Código de agendamento (20 min)
-- Bloco de entrevista (1h)
+- registrar status do processo
+- armazenar informações operacionais
+- registrar presença na entrevista
+- registrar resultado final
+- definir o destino do candidato no fluxo do GEAPA
+
+Também é usada para recuperar:
+
+- Local entrevista
+- Data da dinâmica
+- Horário da dinâmica
+- Local da dinâmica
+
+Quando algum desses campos está vazio na linha do candidato, o sistema pode procurar o valor nas linhas acima, usando o último valor preenchido.
+
+---
+
+## 3. SELETIVO_AGENDAMENTO
+
+Planilha pública de horários.
+
+É a visualização usada pelo candidato para escolher o horário da entrevista.
+
+Contém:
+
+- semana
+- dia
+- faixa de horário
+- códigos dos slots de 20 minutos
+- blocos agregados de 1 hora
+
+---
+
+## 4. SELETIVO_ENTREVISTADORES
+
+Aba privada com a composição das duplas por bloco.
+
+Usada para identificar:
+
+- entrevistadores do bloco
+- entrevistador responsável
+- capacidade total do bloco
+
+---
+
+## 5. SELETIVO_LISTA_ENTREVISTADORES
+
+Lista de entrevistadores com dados de apoio.
+
+Usada para mapear:
+
+- Nome
+- RGA
+- Email
+
+Essa aba é usada especialmente no fluxo de confirmação de presença pós-entrevista.
+
+---
+
+## 6. SELETIVO_RESERVAS
+
+Log privado das entrevistas.
+
+Essa é a fonte oficial do histórico de reservas.
+
+Registra:
+
+- semana
+- dia
+- faixa
+- código
+- bloco
+- capacidade
+- total de reservas
+- nome / email / RGA do candidato
+- dupla do bloco
+- entrevistador responsável
+- threadId / messageId
+- status da reserva
+- status da consulta de presença
+
+---
+
+# Fluxo funcional completo
+
+## 1. Verificação da inscrição
+
+A inscrição é inicialmente recebida em `SELETIVO_INSCRICAO`.
+
+Quando a coluna de verificação é alterada para o valor configurado como **Verificado**:
+
+- o sistema sincroniza os dados básicos do candidato para `SELETIVO_AVALIACAO`
+- envia o e-mail inicial de agendamento
+- registra o status do envio na planilha de inscrição
+
+Esse fluxo é disparado por trigger instalável `onEdit`.
+
+---
+
+## 2. Agendamento por código
+
+Após receber o e-mail inicial, o candidato responde com um código de horário.
 
 Exemplo:
 
-```
-Semana 1
-Segunda
-
-18:00–18:20 → A1
-18:20–18:40 → A2
-18:40–19:00 → A3
-```
-
-O candidato agenda respondendo o e-mail com o código.
-
-Exemplo:
-
-```
+```text
 B3
 ```
 
----
+O sistema então:
 
-# 3. Planilha de Entrevistadores
+- lê threads da label de inbox do seletivo
+- identifica a última **mensagem externa**
+- ignora mensagens enviadas pelo próprio GEAPA
+- extrai o código
+- valida a posição na planilha pública
+- verifica a capacidade do bloco
+- registra a reserva no log
+- envia confirmação ao candidato
 
-Define quais entrevistadores participam de cada bloco.
+### Correção importante implementada
 
-Exemplo:
+O sistema foi ajustado para **ignorar mensagens do próprio GEAPA** ao processar o thread.
 
-| Bloco | Entrevistador 1 | Entrevistador 2 |
-|------|------|------|
-| A | João | Maria |
-| B | Pedro | Ana |
-
-Esses nomes são convertidos automaticamente em **RGA** usando a lista de entrevistadores.
-
----
-
-# 4. Lista de Entrevistadores
-
-Contém o mapeamento:
-
-| Nome | RGA |
-|-----|-----|
-| João | 202011234 |
-| Maria | 202022345 |
-
-Essa planilha é usada para:
-
-- identificar entrevistadores
-- registrar RGAs no log
-- determinar entrevistador responsável
+Isso evita falsos códigos vindos de links internos do e-mail, como ocorria em casos de captura indevida de trechos do URL da planilha.
 
 ---
 
-# 5. Planilha de Log (Reservas)
+## 3. Confirmação da entrevista
 
-Registra cada entrevista agendada.
+Quando a reserva é aceita:
 
-Campos principais:
+- o horário é marcado na planilha pública
+- a entrevista é registrada em `SELETIVO_RESERVAS`
+- o candidato recebe o e-mail de confirmação
 
-| Campo | Descrição |
-|------|------|
-Timestamp | momento do registro |
-Semana | semana da entrevista |
-Dia | dia da semana |
-Faixa | horário da entrevista |
-Código (20min) | código escolhido |
-Bloco (1h) | bloco da entrevista |
-Capacidade | capacidade do bloco |
-Reservas (após) | total após registro |
-Nome | candidato |
-Email | candidato |
-RGA candidato | identificador |
-Entrevistadores do bloco | dupla completa |
-Entrevistador responsável | responsável pelo slot |
-RGA entrevistador responsável | identificador |
-ThreadId | conversa no Gmail |
-MessageId | mensagem específica |
+Esse e-mail já pode incluir o **Local entrevista**, obtido da planilha `SELETIVO_AVALIACAO`.
 
-Essa planilha é a **fonte oficial das entrevistas agendadas**.
+Se a linha atual do candidato estiver vazia nesse campo, o sistema pode procurar o último valor preenchido acima.
 
 ---
 
-# Fluxo completo do processo seletivo
+## 4. Consulta de presença ao entrevistador
 
-## 1. Inscrição
+Após o horário da entrevista e um tempo de tolerância configurável, o sistema:
 
-O candidato preenche o formulário.
+- identifica entrevistas pendentes de confirmação
+- envia um e-mail ao entrevistador responsável
+- pede resposta com `SIM` ou `NAO`
 
-Os dados vão para:
-
-```
-Planilha de Inscrição
-```
+O thread é etiquetado para posterior processamento.
 
 ---
 
-# 2. Verificação
+## 5. Processamento da resposta de presença
 
-Um membro do GEAPA verifica a inscrição.
+Quando o entrevistador responde:
 
-Quando a coluna **Verificado** é marcada:
-
-```
-onEdit trigger
-```
-
+### Se responder `SIM`
 O sistema:
 
-1. envia e-mail ao candidato  
-2. inclui os códigos disponíveis  
-3. inicia o processo de agendamento  
+- marca a reserva como realizada
+- atualiza a planilha de avaliação indicando comparecimento
+- envia e-mail ao candidato com informações da próxima etapa (dinâmica)
+
+### Se responder `NAO`
+O sistema:
+
+- marca a reserva como falta
+- atualiza a avaliação
+- desclassifica automaticamente o candidato por ausência na entrevista
+- envia e-mail informando a desclassificação
 
 ---
 
-# 3. Escolha do horário
+## 6. Remarcação antecipada
 
-O candidato responde ao e-mail com um código.
+O log suporta o status:
 
-Exemplo:
-
-```
-B3
+```text
+Remarcada antecipadamente
 ```
 
----
+Quando esse status é definido manualmente:
 
-# 4. Processamento do Inbox
+- a linha permanece no log como histórico
+- ela deixa de contar como reserva ativa
+- o sistema pode reenviar o e-mail inicial de agendamento ao candidato
+- o candidato escolhe um novo código
+- uma nova linha é criada no log para a nova marcação
 
-A função responsável é:
-
-```
-seletivo_processInbox()
-```
-
-Essa função:
-
-1. lê novos e-mails
-2. extrai o código enviado
-3. valida se o código existe
-4. verifica se ainda há vaga
-5. reserva o horário
-
----
-
-# 5. Identificação do entrevistador
-
-O sistema identifica:
-
-- bloco da entrevista
-- dupla de entrevistadores
-- entrevistador responsável
-
-Função responsável:
-
-```
-getInterviewersPairsForBlock_()
-```
-
----
-
-# 6. Registro da entrevista
-
-A reserva é registrada no log.
-
-Função:
-
-```
-appendLogRow_()
-```
+Essa estratégia preserva histórico e evita sobrescrever reservas anteriores.
 
 ---
 
 # Estrutura do código
 
-Arquivos principais do módulo.
+## `00_seletivo_config.js`
+Configurações do módulo:
 
----
-
-## 00_Config.gs
-
-Contém:
-
-- constantes do sistema
-- nomes de planilhas
-- cabeçalhos
+- keys do Registry
 - templates de e-mail
+- cabeçalhos e valores de referência
+- labels Gmail
+- parâmetros de agendamento e presença
 
----
-
-## 01_Main_ProcessInbox.gs
+## `00A_OnEdit_Verificacao.gs`
+Trigger de edição da planilha de inscrição.
 
 Responsável por:
 
-- ler e-mails recebidos
-- identificar códigos
-- validar disponibilidade
+- detectar candidato verificado
+- sincronizar com avaliação
+- enviar e-mail inicial de agendamento
+
+## `00B_OnEdit_Log_Remarcacao.gs`
+Trigger de edição do log.
+
+Responsável por:
+
+- detectar `Status reserva = Remarcada antecipadamente`
+- reenviar o e-mail inicial de agendamento
+
+## `01_main_processInbox.js`
+Responsável por:
+
+- processar respostas com código de horário
 - registrar reservas
+- enviar confirmação ao candidato
+- processar respostas de presença do entrevistador
 
----
+## `02_Main_RefreshVisualization.js`
+Responsável por atualizar a visualização pública de horários.
 
-## 02_Main_RefreshVisualization.gs
+## `03_Gmail_Core.js`
+Helpers de Gmail e envio de e-mails do módulo.
 
-Atualiza:
+## `04_Gmail_FollowUps.js`
+Rotinas periódicas relacionadas ao Gmail, incluindo envio de consultas de presença.
 
-- planilha pública de horários
-- disponibilidade dos slots
+## `05_Forms_VerificationAndLookup.js`
+Leitura da planilha de inscrição, verificação e sincronização para avaliação.
 
----
+## `07_Sheets_Interviewers.js`
+Mapeamento dos entrevistadores por bloco.
 
-## 07_Sheets_Interviewers.gs
+## `08_Sheets_Log.js`
+Gerenciamento do log de reservas e presença.
 
-Responsável por:
+## `09_Utils_TextParsing.js`
+Parsers e helpers de texto, incluindo leitura de respostas `SIM` / `NAO`.
 
-- localizar entrevistadores do bloco
-- converter nomes em RGAs
-- identificar entrevistador responsável
+## `12_Sheets_Avaliacao.js`
+Operações sobre a planilha de avaliação:
 
-Funções principais:
+- localizar candidato
+- atualizar status
+- buscar local da entrevista
+- buscar dados da dinâmica
+- fallback em linhas superiores
 
-```
-getInterviewersPairsForBlock_
-getInterviewersNameToRgaMap_
-```
-
----
-
-## 08_Sheets_Log.gs
-
-Gerencia o log de entrevistas.
-
-Funções:
-
-```
-ensureLogSheet_
-appendLogRow_
-countBookings_
-alreadyLogged_
-```
-
----
-
-# Integração com GEAPA-CORE
-
-O sistema utiliza o **GEAPA-CORE como library**.
-
-Funções usadas:
-
-```
-coreGetSheetByKey()
-core_getRegistry_()
-```
-
-Isso permite que:
-
-- planilhas sejam referenciadas por **KEY**
-- o sistema não dependa de IDs fixos
+## `50_seletivo_install.js`
+Instalação e remoção de triggers.
 
 ---
 
 # Triggers utilizados
 
-## onEdit
+O módulo utiliza triggers instaláveis para:
 
-Disparado quando:
-
-```
-coluna Verificado = TRUE
-```
-
-Função executada:
-
-```
-enviarConviteEntrevista
-```
+- verificar alterações em inscrição
+- verificar alterações em remarcação no log
+- processar inbox do seletivo
+- enviar consultas de presença
+- processar respostas de presença
+- atualizar visualização e demais rotinas periódicas
 
 ---
 
-## Time Trigger
+# Integração com o módulo de membros
 
-Executa periodicamente:
+O módulo de processo seletivo não integra diretamente candidatos nas bases de membros.
 
-```
-seletivo_processInbox
-```
+A função da planilha `SELETIVO_AVALIACAO` é definir o **resultado final** do candidato.
 
-Responsável por processar respostas de e-mail.
+A importação para o módulo de membros é feita no repositório `geapa-membros`, usando:
 
----
-
-# Integração futura: Planilha de Avaliação
-
-Quando o candidato for **verificado**, seus dados poderão ser copiados automaticamente para:
-
-```
-Planilha Avaliação dos Candidatos
-```
-
-Campos transferidos:
-
-- semestre do seletivo
-- nome
-- email
-- RGA
-- semestre atual
-- experiências
-- CR
-
-Essa planilha será usada para:
-
-- registrar notas da entrevista
-- registrar dinâmica
-- calcular nota final
-- definir resultado
+- `SELETIVO_AVALIACAO` como definidora do destino
+- `SELETIVO_INSCRICAO` como fonte dos dados cadastrais
 
 ---
 
-# Melhorias futuras
+# Observações importantes
 
-## Confirmação automática da entrevista
+## Sobre contas iCloud e e-mails não Google
 
-Após o horário da entrevista:
+O restante do fluxo funciona normalmente com e-mails como:
 
-- o sistema envia e-mail ao entrevistador responsável
-- pergunta se a entrevista ocorreu
+- iCloud
+- Outlook
+- Hotmail
+- outros
 
-Possíveis respostas:
+A única limitação importante está no **Google Forms com upload de arquivos**, que exige conta Google para responder.
 
-```
-Entrevistado
-Ausente
-Remarcado
-```
+Por isso, se o formulário do seletivo precisar aceitar candidatos sem conta Google, a recomendação é:
 
----
+- remover perguntas de upload
+- usar links de documentos ou envio posterior por e-mail
 
-## Desclassificação automática por ausência
+## Sobre leitura de threads
 
-Se:
+O sistema foi corrigido para processar apenas a **última mensagem externa válida** do thread.
 
-- candidato não compareceu
-- não houve justificativa
-
-o sistema poderá marcar:
-
-```
-Resultado = Desclassificado
-```
-
----
-
-## Envio automático de resultados
-
-Com base na planilha de avaliação.
+Isso evita que o próprio e-mail enviado pelo GEAPA seja interpretado como resposta do candidato.
 
 ---
 
@@ -436,20 +411,17 @@ Com base na planilha de avaliação.
 
 O sistema usa:
 
-```
+```text
 GitHub + CLASP
 ```
 
-Fluxo de desenvolvimento:
+Fluxo típico:
 
-```
-Apps Script
-↓
-clasp pull
-↓
-Git commit
-↓
-Git push
+```text
+clasp pull / clasp push
+git add
+git commit
+git push
 ```
 
 ---
