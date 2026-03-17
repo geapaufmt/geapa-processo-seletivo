@@ -5,27 +5,28 @@
 
 // Handlers desta versão
 const SELETIVO_TRIGGERS = Object.freeze([
-  { fn: "seletivo_onEditVerificacao", type: "onEditSpreadsheet" },
+  { fn: "seletivo_onEditVerificacao", type: "onEditSpreadsheet", sheetKey: "SELETIVO_INSCRICAO" },
+  { fn: "seletivo_onEditLogRemarcacao", type: "onEditSpreadsheet", sheetKey: "SELETIVO_RESERVAS" },
+
   { fn: "processInboxReplies", type: "timeMinutes", minutes: 5 },
   { fn: "refreshVisualizationFromInterviewers", type: "timeMinutes", minutes: 10 },
   { fn: "seletivo_updateCurrentSemesterColumn", type: "timeMinutes", minutes: 10 },
+  { fn: "seletivo_sendPendingPresenceChecks", type: "timeMinutes", minutes: 5 },
   { fn: "seletivo_processPresenceInbox", type: "timeMinutes", minutes: 5 }
 ]);
 
 function seletivo_installTriggers() {
   seletivo_uninstallTriggers();
 
-  const formsSheet = GEAPA_CORE.coreGetSheetByKey(SETTINGS.formsResponsesKey);
-  if (!formsSheet) {
-    throw new Error("Não foi possível localizar a aba SELETIVO_INSCRICAO.");
-  }
-
-  const spreadsheet = formsSheet.getParent();
-
   SELETIVO_TRIGGERS.forEach(t => {
     if (t.type === "onEditSpreadsheet") {
+      const sh = GEAPA_CORE.coreGetSheetByKey(t.sheetKey);
+      if (!sh) {
+        throw new Error("Não foi possível localizar a aba para key: " + t.sheetKey);
+      }
+
       ScriptApp.newTrigger(t.fn)
-        .forSpreadsheet(spreadsheet)
+        .forSpreadsheet(sh.getParent())
         .onEdit()
         .create();
     }

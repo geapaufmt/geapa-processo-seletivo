@@ -30,6 +30,8 @@ const SETTINGS = Object.freeze({
   interviewerListNameHeader: "Nome",
   interviewerListRgaHeader: "RGA",
 
+  remarcadaAntecipadamenteStatus: "Remarcada antecipadamente",
+
   formsRgaHeader: "RGA",
 
   verifiedStatusValue: "Verificado",

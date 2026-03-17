@@ -102,7 +102,12 @@ function seletivo_processVerifiedRow_(sh, row, headers) {
   const noteIdx = headers.indexOf(String(SETTINGS.postVerificationNoteHeader || "").trim());
 
   Logger.log('processVerifiedRow: row=' + row);
-  Logger.log('processVerifiedRow: emailIdx=' + emailIdx + ' | nameIdx=' + nameIdx + ' | emailStatusIdx=' + emailStatusIdx + ' | noteIdx=' + noteIdx);
+  Logger.log(
+    'processVerifiedRow: emailIdx=' + emailIdx +
+    ' | nameIdx=' + nameIdx +
+    ' | emailStatusIdx=' + emailStatusIdx +
+    ' | noteIdx=' + noteIdx
+  );
 
   if (emailIdx < 0) throw new Error("Coluna de email não encontrada.");
 
@@ -163,6 +168,7 @@ function seletivo_processVerifiedRow_(sh, row, headers) {
 
     Logger.log('processVerifiedRow: envio falhou, status registrado na planilha.');
   }
+}
 
 function seletivo_sendInitialSchedulingEmail_(email, nome) {
   try {
@@ -194,7 +200,6 @@ function seletivo_sendInitialSchedulingEmail_(email, nome) {
       htmlBody: htmlBody
     });
 
-    // Garante label do inbox no thread recém-criado
     GEAPA_CORE.coreEnsureLabel(SETTINGS.inboxLabel);
     const labelInbox = GEAPA_CORE.coreGetLabel(SETTINGS.inboxLabel);
 
@@ -214,18 +219,5 @@ function seletivo_sendInitialSchedulingEmail_(email, nome) {
   } catch (err) {
     console.error('seletivo_sendInitialSchedulingEmail_ erro:', err);
     return false;
-  }
-}
-
-  if (emailStatusIdx >= 0) {
-    sh.getRange(row, emailStatusIdx + 1).setValue(
-      `E-mail enviado em ${Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss")}`
-    );
-    Logger.log('processVerifiedRow: status de e-mail atualizado.');
-  }
-
-  if (noteIdx >= 0) {
-    sh.getRange(row, noteIdx + 1).setValue("Sync OK; função de envio executada em " +
-      Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss"));
   }
 }

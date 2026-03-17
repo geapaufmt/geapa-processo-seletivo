@@ -69,6 +69,7 @@ function countBookings_(shLog, weekTitle, code20) {
     const headerMap = getLogHeaderMap_(shLog);
     const weekIdx = headerMap["Semana"];
     const codeIdx = headerMap["Código (20min)"];
+    const statusIdx = headerMap["Status reserva"];
 
     if (weekIdx == null || codeIdx == null) {
       throw new Error('countBookings_: cabeçalhos "Semana" e/ou "Código (20min)" não encontrados.');
@@ -84,7 +85,14 @@ function countBookings_(shLog, weekTitle, code20) {
     for (const r of values) {
       const week = String(r[weekIdx] || "").trim();
       const cod = String(r[codeIdx] || "").toUpperCase().trim();
-      if (week === weekTarget && cod === codeTarget) cnt++;
+      const status = statusIdx != null ? String(r[statusIdx] || "").trim().toUpperCase() : "";
+
+      if (week !== weekTarget || cod !== codeTarget) continue;
+
+      // ignora reservas remarcadas antecipadamente
+      if (status === "REMARCADA ANTECIPADAMENTE") continue;
+
+      cnt++;
     }
 
     return cnt;
