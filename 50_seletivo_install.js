@@ -8,7 +8,8 @@ const SELETIVO_TRIGGERS = Object.freeze([
   { fn: "seletivo_onEditVerificacao", type: "onEditSpreadsheet" },
   { fn: "processInboxReplies", type: "timeMinutes", minutes: 5 },
   { fn: "refreshVisualizationFromInterviewers", type: "timeMinutes", minutes: 10 },
-  { fn: "seletivo_updateCurrentSemesterColumn", type: "timeMinutes", minutes: 10 }
+  { fn: "seletivo_updateCurrentSemesterColumn", type: "timeMinutes", minutes: 10 },
+  { fn: "seletivo_processPresenceInbox", type: "timeMinutes", minutes: 5 }
 ]);
 
 function seletivo_installTriggers() {

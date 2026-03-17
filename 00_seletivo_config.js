@@ -17,6 +17,7 @@ const SETTINGS = Object.freeze({
   inboxLabel: "Entrevistas/Respostas",
   processedLabel: "Entrevistas/Processados",
   errorLabel: "Entrevistas/Erros",
+  presenceCheckLabel: "Entrevistas/PresencaRespostas",
 
   publicScheduleKey: "SELETIVO_AGENDAMENTO",
   privateLogKey: "SELETIVO_RESERVAS",
@@ -34,7 +35,8 @@ const SETTINGS = Object.freeze({
   verifiedStatusValue: "Verificado",
   verificationStatusHeader: "Verificação",
 
-  // NOVOS
+  consultaPresencaDelayMin: 25, // minutos após o horário marcado para começar a checar presença (ajustável conforme duração da entrevista)
+
   emailStatusHeader: "Status E-mail",
   postVerificationNoteHeader: "Observações (verificação)",
 
@@ -46,7 +48,6 @@ const SETTINGS = Object.freeze({
     <p>Se já regularizou, aguarde alguns minutos e tente novamente, ou aguarde até enviarmos outro email de agendamento.</p>
   `,
 
-  // NOVOS
   inviteSubject: "Agendamento de entrevista – Processo Seletivo GEAPA",
   inviteHtml: `
     <p>Olá, <b>{{NOME}}</b>!</p>
@@ -56,6 +57,10 @@ const SETTINGS = Object.freeze({
     <p><a href="{{LINK_PLANILHA}}">{{LINK_PLANILHA}}</a></p>
     <p>Atenciosamente,<br>Equipe de Seleção</p>
   `,
+
+  presenceCheckSubject: "Confirmação de presença na entrevista – Processo Seletivo GEAPA",
+  presenceApprovedSubject: "Próxima etapa do Processo Seletivo GEAPA",
+  presenceRejectedSubject: "Resultado da entrevista – Processo Seletivo GEAPA",
 
   // Regras de mapeamento por dia (coluna da grade -> prefixo do bloco)
   AGG_RULES: [

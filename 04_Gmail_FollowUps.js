@@ -54,3 +54,53 @@ function requeueFollowUps_() {
 
   console.log("requeueFollowUps_: threads refiled =", moved);
 }
+
+function seletivo_sendPendingPresenceChecks() {
+  try {
+    Logger.log('seletivo_sendPendingPresenceChecks: INÍCIO');
+
+    const pendentes = seletivo_findReservasPendentesDeConsultaPresenca_();
+    Logger.log('seletivo_sendPendingPresenceChecks: pendentes=' + pendentes.length);
+
+    if (!pendentes || !pendentes.length) {
+      Logger.log('seletivo_sendPendingPresenceChecks: nenhuma reserva pendente.');
+      return;
+    }
+
+    pendentes.forEach(reserva => {
+      try {
+        Logger.log(
+          'seletivo_sendPendingPresenceChecks: processando row=' + reserva.rowNumber +
+          ' | candidato=' + reserva.nome +
+          ' | entrevistador=' + reserva.nomeEntrevistadorResponsavel
+        );
+
+        const envio = seletivo_sendPresenceCheckEmail_(reserva);
+        Logger.log('seletivo_sendPendingPresenceChecks: resultado envio=' + JSON.stringify(envio));
+
+        if (envio && envio.ok) {
+          seletivo_logMarkPresenceCheckSent_(reserva.rowNumber, {
+            threadId: envio.threadId || '',
+            messageId: envio.messageId || ''
+          });
+
+          Logger.log('seletivo_sendPendingPresenceChecks: log atualizado para row=' + reserva.rowNumber);
+        } else {
+          Logger.log(
+            'seletivo_sendPendingPresenceChecks: envio não concluído para row=' +
+            reserva.rowNumber + ' | motivo=' + (envio ? envio.reason : 'desconhecido')
+          );
+        }
+      } catch (innerErr) {
+        console.error(
+          'seletivo_sendPendingPresenceChecks: erro ao processar row=' +
+          reserva.rowNumber + ':', innerErr
+        );
+      }
+    });
+
+    Logger.log('seletivo_sendPendingPresenceChecks: FIM');
+  } catch (e) {
+    console.error('seletivo_sendPendingPresenceChecks erro:', e);
+  }
+}

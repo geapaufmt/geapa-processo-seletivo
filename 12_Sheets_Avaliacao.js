@@ -185,10 +185,94 @@ function seletivo_getLocalEntrevistaByRgaOrEmail_(rga, email) {
       return '';
     }
 
-    const valor = sheet.getRange(lookup.rowNumber, colLocal).getDisplayValue();
+    const valor = seletivo_getNearestFilledValueUp_(sheet, lookup.rowNumber, colLocal);
     return String(valor || '').trim();
   } catch (e) {
     console.error('seletivo_getLocalEntrevistaByRgaOrEmail_ erro:', e);
     return '';
   }
+}
+
+function seletivo_getAvaliacaoDynamicInfoByRgaOrEmail_(rga, email) {
+  try {
+    const lookup = seletivo_findAvaliacaoRowByRgaOrEmail_(rga, email);
+    if (!lookup || !lookup.found) {
+      Logger.log('seletivo_getAvaliacaoDynamicInfoByRgaOrEmail_: candidato não encontrado.');
+      return {
+        rowNumber: null,
+        dataDinamica: '',
+        horarioDinamica: '',
+        localDinamica: ''
+      };
+    }
+
+    const sheet = seletivo_getAvaliacaoSheet_();
+    const headers = getAvaliacaoHeaderMap_(sheet);
+
+    const colData = headers['Data da dinâmica'];
+    const colHorario = headers['Horário da dinâmica'];
+    const colLocal = headers['Local da dinâmica'];
+
+    const dataDinamica = colData
+      ? seletivo_getNearestFilledValueUp_(sheet, lookup.rowNumber, colData)
+      : '';
+
+    const horarioDinamica = colHorario
+      ? seletivo_getNearestFilledValueUp_(sheet, lookup.rowNumber, colHorario)
+      : '';
+
+    const localDinamica = colLocal
+      ? seletivo_getNearestFilledValueUp_(sheet, lookup.rowNumber, colLocal)
+      : '';
+
+    return {
+      rowNumber: lookup.rowNumber,
+      dataDinamica,
+      horarioDinamica,
+      localDinamica
+    };
+  } catch (e) {
+    console.error('seletivo_getAvaliacaoDynamicInfoByRgaOrEmail_ erro:', e);
+    return {
+      rowNumber: null,
+      dataDinamica: '',
+      horarioDinamica: '',
+      localDinamica: ''
+    };
+  }
+}
+
+function seletivo_getNearestFilledValueUp_(sheet, startRow, colNumber) {
+  try {
+    for (let row = startRow; row >= 2; row--) {
+      const value = sheet.getRange(row, colNumber).getValue();
+      const display = sheet.getRange(row, colNumber).getDisplayValue();
+
+      if (value instanceof Date) return value;
+      if (String(display || '').trim()) return value || display;
+    }
+    return '';
+  } catch (e) {
+    console.error('seletivo_getNearestFilledValueUp_ erro:', e);
+    return '';
+  }
+}
+
+function seletivo_formatMaybeDate_(value) {
+  if (!value) return '';
+
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+  }
+
+  return String(value).trim();
+}
+
+function seletivo_formatMaybeTime_(value) {
+  if (!value) return '';
+
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'HH:mm');
+  }
+  return String(value || '').trim();
 }

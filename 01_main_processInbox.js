@@ -270,3 +270,110 @@ function handleInterviewThreadError_(thread, err, labelInbox, labelError) {
 
   console.error("Erro processando thread:", err);
 }
+
+/***************************************
+ * PROCESSAMENTO DE RESPOSTAS DE PRESENÇA
+ ***************************************/
+
+function seletivo_processPresenceInbox() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return;
+
+  try {
+    GEAPA_CORE.coreEnsureLabel(SETTINGS.presenceCheckLabel);
+    const labelPresence = GEAPA_CORE.coreGetLabel(SETTINGS.presenceCheckLabel);
+
+    if (!labelPresence) {
+      Logger.log('seletivo_processPresenceInbox: label de presença não encontrada.');
+      return;
+    }
+
+    const threads = labelPresence.getThreads(0, 30);
+    Logger.log('seletivo_processPresenceInbox: threads=' + threads.length);
+
+    if (!threads.length) return;
+
+    for (const thread of threads) {
+      try {
+        seletivo_handlePresenceThread_(thread, labelPresence);
+      } catch (err) {
+        console.error('seletivo_processPresenceInbox: erro no thread ' + thread.getId() + ':', err);
+      }
+    }
+  } finally {
+    try { lock.releaseLock(); } catch (_) {}
+  }
+}
+
+function seletivo_handlePresenceThread_(thread, labelPresence) {
+  const msgs = thread.getMessages();
+  if (!msgs || !msgs.length) return;
+
+  const myEmails = [Session.getActiveUser().getEmail(), ...GmailApp.getAliases()]
+    .map(e => String(e || '').toLowerCase());
+
+  function isFromMe_(from) {
+    const f = String(from || '').toLowerCase();
+    return myEmails.some(me => me && f.includes(me));
+  }
+
+  // pega a última mensagem que NÃO é sua
+  let msg = null;
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (!isFromMe_(msgs[i].getFrom())) {
+      msg = msgs[i];
+      break;
+    }
+  }
+
+  if (!msg) {
+    Logger.log('seletivo_handlePresenceThread_: nenhuma resposta externa no thread ' + thread.getId());
+    return;
+  }
+
+  const body = (msg.getPlainBody() || '') + '\n' + (msg.getBody() || '');
+  const resposta = seletivo_parsePresenceAnswer_(body);
+
+  Logger.log('seletivo_handlePresenceThread_: threadId=' + thread.getId() + ' | resposta=' + resposta);
+
+  if (!resposta) {
+    Logger.log('seletivo_handlePresenceThread_: resposta não reconhecida.');
+    return;
+  }
+
+  const reserva = seletivo_findReservaByPresenceThreadId_(thread.getId());
+  if (!reserva) {
+    Logger.log('seletivo_handlePresenceThread_: reserva não encontrada para threadId=' + thread.getId());
+    return;
+  }
+
+  const rowNumber = reserva.rowNumber;
+  const row = reserva.rowValues;
+  const shLog = seletivo_getReservasSheet_();
+  const map = getLogHeaderMap_(shLog);
+
+  const idxRga = map["RGA Candidato"];
+  const idxEmail = map["E-mail"];
+
+  const rgaCandidato = idxRga != null ? String(row[idxRga] || '').trim() : '';
+  const emailCandidato = idxEmail != null ? String(row[idxEmail] || '').trim() : '';
+  const idxNome = map["Nome"];
+  const nomeCandidato = idxNome != null ? String(row[idxNome] || '').trim() : '';
+
+  if (resposta === 'SIM') {
+    seletivo_logMarkReservaRealizada_(rowNumber);
+    seletivo_markAvaliacaoCompareceu_(rgaCandidato, emailCandidato);
+    seletivo_sendPostInterviewApprovedEmail_(rgaCandidato, emailCandidato, nomeCandidato);
+    Logger.log('seletivo_handlePresenceThread_: presença confirmada para row=' + rowNumber);
+  }
+
+  if (resposta === 'NAO') {
+    seletivo_logMarkReservaFaltou_(rowNumber);
+    seletivo_markAvaliacaoFaltou_(rgaCandidato, emailCandidato);
+    seletivo_sendPostInterviewRejectedEmail_(emailCandidato, row[map["Nome"]] || '');
+    Logger.log('seletivo_handlePresenceThread_: falta registrada para row=' + rowNumber);
+  }
+
+  thread.markRead();
+  if (labelPresence) thread.removeLabel(labelPresence);
+}
