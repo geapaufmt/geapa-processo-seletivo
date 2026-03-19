@@ -7,6 +7,28 @@
  * - publicScheduleKey (ex.: "SELETIVO_AGENDAMENTO")
  * - privateLogKey     (ex.: "SELETIVO_RESERVAS")
  * (e opcionalmente remover: publicScheduleSpreadsheetId/privateLogSpreadsheetId/publicScheduleSheetName)
+ * - codeRegex (ex.: /CÓDIGO:\s*([A-Z0-9]{20})/i)
+ * - denySubject, denyHtml, confirmSubject, confirmHtml, verificationSubject, verificationHtml (mantém)
+ * - reservedTextPublic (ex.: "Reservado") — texto a exibir na célula pública quando alguém reservar um horário
+ * - formsResponsesSpreadsheetId, formsResponsesSheetName, formsRgaHeader (para verificação de email/RGA via respostas de formulário)
+ * - selectors para extrair nome/email do campo "From" do Gmail (pode ser necessário ajustar dependendo do formato dos emails recebidos)
+ * - Outros ajustes de texto e formatação conforme necessário
+ *  - Funcionalidades:
+ * - Processa respostas de presença para entrevistas, identificando o código único enviado no email e atualizando a planilha pública de agendamento
+ * - Envia emails de confirmação ou negação com templates personalizados
+ * - Registra todas as ações em uma planilha de log para auditoria e análise
+ * - Verifica se o email do remetente está registrado nas respostas do formulário de inscrição para validar a reserva
+ * - Considerações de segurança:
+ * - Garantir que os códigos únicos sejam suficientemente complexos para evitar adivinhação
+ * - Garantir que apenas respostas válidas com códigos corretos sejam processadas
+ * - Garantir que os dados pessoais dos candidatos sejam tratados de forma segura e em conformidade com as políticas de privacidade
+ * - Garantir que os templates de email sejam construídos de forma segura para evitar injeção de HTML ou outros ataques
+ * - Documentação:
+ * - Documentar as funções e seus parâmetros, bem como o fluxo geral do processo de agendamento e confirmação
+ * - Documentar as dependências e como configurar o ambiente para que o processo funcione corretamente
+ * - Documentar os testes realizados e os resultados esperados para cada cenário
+ * - Conclusão:
+ * Este módulo é responsável por processar as respostas de presença dos candidatos às entrevistas, garantindo que apenas respostas válidas sejam aceitas e que a planilha pública de agendamento seja atualizada de forma consistente. Ele é estruturado para ser claro, modular e fácil de manter, com considerações para segurança e testes abrangentes.
  ***************************************/
 
 function processInboxReplies() {

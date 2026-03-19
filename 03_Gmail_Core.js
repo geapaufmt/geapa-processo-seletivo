@@ -1,5 +1,21 @@
 /***************************************
  * 03_Gmail_Core.gs
+ * Funções centrais para interação com Gmail, como envio de e-mails, respostas a threads, marcação de mensagens e extração de informações de remetentes.
+ * Essas funções são utilizadas por outros módulos para facilitar a comunicação por e-mail dentro do processo de desligamentos e suspensões.
+ * - Segurança:
+ *   - Todos os e-mails enviados são registrados em uma planilha de log.
+ *  - As funções de envio de e-mail garantem que os dados pessoais sejam tratados de forma segura e em conformidade com as políticas de privacidade.
+ *  - As funções de resposta a threads garantem que as mensagens sejam construídas de forma segura para evitar injeção de HTML ou outros ataques.
+ * - Testes:
+ *  - Testar o envio de e-mails com diferentes tipos de conteúdo para garantir que sejam formatados corretamente.
+ * - Testar a resposta a threads para garantir que as mensagens sejam associadas corretamente e que as marcações sejam aplicadas conforme esperado.
+ * - Testar a extração de e-mails e nomes de remetentes com diferentes formatos para garantir que as informações sejam extraídas corretamente.
+ * - Documentação:
+ * - Documentar as funções e seus parâmetros, bem como o fluxo geral de envio de e-mails e resposta a threads.
+ * - Documentar as dependências e como configurar o ambiente para que as funções de e-mail funcionem corretamente.
+ * - Documentar os testes realizados e os resultados esperados para cada cenário.
+ * - Conclusão:
+ * Este módulo é responsável por fornecer funções centrais para interação com o Gmail, facilitando o envio de e-mails, respostas a threads e marcação de mensagens. Ele é utilizado por outros módulos para garantir uma comunicação eficiente e segura por e-mail dentro do processo de desligamentos e suspensões. O código é estruturado para ser claro, modular e fácil de manter, com considerações para segurança e testes abrangentes.
  ***************************************/
 function reply_(thread, subject, htmlBody) {
   thread.reply("", { subject, htmlBody, noReply: true });

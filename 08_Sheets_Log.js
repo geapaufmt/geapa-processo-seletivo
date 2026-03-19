@@ -1,5 +1,39 @@
 /***************************************
  * 08_Sheets_Log.gs — OK c/ GEAPA-CORE
+ * Gerencia a planilha de log de reservas de entrevistas do processo seletivo.
+ * Inclui funções para contar reservas, evitar duplicatas e marcar status de presença.
+ * Funciona em conjunto com o módulo de agendamento de entrevistas, que registra as reservas e consultas de presença.
+ *
+ * Funções principais:
+ * - ensureLogSheet_: garante que a aba de log exista, criando se necessário
+ * - getLogHeaders_: define os cabeçalhos das colunas do log
+ * - getLogHeaderMap_: mapeia os cabeçalhos para índices de coluna
+ * - countBookings_: conta quantas reservas existem para uma combinação de semana e código
+ * - appendLogRow_: adiciona uma linha de log com os dados da reserva, evitando duplicatas
+ * - alreadyLogged_: verifica se uma combinação de semana, código e threadId já foi logada
+ *
+ * Funções relacionadas à presença:
+ * - seletivo_getReservasSheet_: obtém a planilha de reservas para consultas de presença
+ * - seletivo_getReservasHeaderMap_: obtém o mapa de cabeçalhos da planilha de reservas
+ * - seletivo_findReservasPendentesDeConsultaPresenca_: encontra reservas que estão pendentes de consulta de presença
+ * - seletivo_logMarkPresenceCheckSent_: marca no log que a consulta de presença foi enviada
+ * - seletivo_findReservaByPresenceThreadId_: encontra uma reserva pelo threadId da consulta de presença
+ * - seletivo_logMarkReservaRealizada_: marca no log que a reserva foi realizada (presença confirmada)
+ * - seletivo_logMarkReservaFaltou_: marca no log que o candidato faltou (presença negada)
+ * - seletivo_tryBuildInterviewDateTime_: tenta construir um Date da entrevista usando "Dia" + "Faixa", assumindo o ciclo atual
+ * - seletivo_parseWeekStartDate_: tenta extrair a data de início da semana a partir do texto da semana
+ * - seletivo_testBuildInterviewDateTime_: função de teste para validar a construção da data da entrevista
+ * Considerações de segurança:
+ * - Garantir que apenas usuários autorizados possam acessar e editar a planilha de log
+ * - Garantir que os dados pessoais dos candidatos e entrevistadores sejam tratados de forma segura e em conformidade com as políticas de privacidade
+ * - Garantir que o processo de consulta e marcação de presença não exponha dados sensíveis ou permita ações não autorizadas
+ * - Garantir que os erros sejam registrados de forma segura sem expor informações sensíveis
+ * Documentação:
+ * - Documentar as funções e seus parâmetros, bem como o fluxo geral do processo de log e consulta de presença
+ * - Documentar as dependências e como configurar o ambiente para que o processo funcione corretamente
+ * - Documentar os testes realizados e os resultados esperados para cada cenário
+ * Conclusão:
+ * Este módulo é responsável por gerenciar a planilha de log de reservas de entrevistas, garantindo que as informações sejam registradas de forma consistente e segura. Ele inclui funcionalidades para contar reservas, evitar duplicatas e marcar status de presença, trabalhando em conjunto com o módulo de agendamento de entrevistas para fornecer uma visão completa do processo seletivo.
  ***************************************/
 
 function ensureLogSheet_(ssLog, sheetNameOverride) {
@@ -222,6 +256,7 @@ function seletivo_findReservasPendentesDeConsultaPresenca_() {
     const lastCol = shLog.getLastColumn();
     const values = shLog.getRange(2, 1, lastRow - 1, lastCol).getValues();
 
+    const idxSemana = headerMap["Semana"];
     const idxDia = headerMap["Dia"];
     const idxFaixa = headerMap["Faixa"];
     const idxEmail = headerMap["E-mail"];
@@ -250,6 +285,7 @@ function seletivo_findReservasPendentesDeConsultaPresenca_() {
 
       const statusReserva = String(row[idxStatusReserva] || "").trim().toUpperCase();
       const consultaEnviada = String(row[idxConsultaEnviada] || "").trim().toUpperCase();
+      const semana = String(row[idxSemana] || "").trim();
       const dia = String(row[idxDia] || "").trim();
       const faixa = String(row[idxFaixa] || "").trim();
 
@@ -257,6 +293,7 @@ function seletivo_findReservasPendentesDeConsultaPresenca_() {
         'Linha ' + rowNumber +
         ' | statusReserva=' + statusReserva +
         ' | consultaEnviada=' + consultaEnviada +
+        ' | semana=' + semana +
         ' | dia=' + dia +
         ' | faixa=' + faixa
       );
@@ -271,7 +308,7 @@ function seletivo_findReservasPendentesDeConsultaPresenca_() {
         continue;
       }
 
-      const dtInicio = seletivo_tryBuildInterviewDateTime_(dia, faixa, agora);
+      const dtInicio = seletivo_tryBuildInterviewDateTime_(semana, dia, faixa, agora);
       Logger.log('Linha ' + rowNumber + ': dtInicio=' + dtInicio);
 
       if (!dtInicio) {
@@ -410,13 +447,17 @@ function seletivo_logMarkReservaFaltou_(rowNumber) {
  * Tenta montar um Date da entrevista usando "Dia" + "Faixa".
  * Assume que o log é do ciclo atual e usa a próxima ocorrência do dia da semana.
  */
-function seletivo_tryBuildInterviewDateTime_(dia, faixa, baseDate) {
+function seletivo_tryBuildInterviewDateTime_(semana, dia, faixa, baseDate) {
   try {
-    Logger.log('seletivo_tryBuildInterviewDateTime_: dia=' + dia + ' | faixa=' + faixa + ' | baseDate=' + baseDate);
+    Logger.log(
+      'seletivo_tryBuildInterviewDateTime_: semana=' + semana +
+      ' | dia=' + dia +
+      ' | faixa=' + faixa +
+      ' | baseDate=' + baseDate
+    );
 
     const faixaStr = String(faixa || '').trim();
 
-    // aceita "9h30-10h30", "09h30-10h30", "09:30-10:30"
     let hora = null;
     let minuto = null;
 
@@ -436,7 +477,9 @@ function seletivo_tryBuildInterviewDateTime_(dia, faixa, baseDate) {
 
     if (hora == null || minuto == null) return null;
 
-    const diasSemana = {
+    // Semana começando no DOMINGO
+    const diasSemanaOffset = {
+      "DOMINGO": 0,
       "SEGUNDA": 1,
       "SEGUNDA-FEIRA": 1,
       "TERÇA": 2,
@@ -450,27 +493,28 @@ function seletivo_tryBuildInterviewDateTime_(dia, faixa, baseDate) {
       "SEXTA": 5,
       "SEXTA-FEIRA": 5,
       "SÁBADO": 6,
-      "SABADO": 6,
-      "DOMINGO": 0
+      "SABADO": 6
     };
 
-    const diaNorm = String(dia || '').trim().toUpperCase();
-    const alvo = diasSemana[diaNorm];
+    const diaNorm = String(dia || '')
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase();
 
-    Logger.log('seletivo_tryBuildInterviewDateTime_: diaNorm=' + diaNorm + ' | alvo=' + alvo);
+    const offset = diasSemanaOffset[diaNorm];
 
-    if (alvo == null) return null;
+    Logger.log('seletivo_tryBuildInterviewDateTime_: diaNorm=' + diaNorm + ' | offset=' + offset);
 
-    const d = new Date(baseDate);
-    const atual = d.getDay();
-    let diff = alvo - atual;
+    if (offset == null) return null;
 
-    if (diff > 3) diff -= 7;
-    if (diff < -3) diff += 7;
+    const inicioSemana = seletivo_parseWeekStartDate_(semana, baseDate);
+    Logger.log('seletivo_tryBuildInterviewDateTime_: inicioSemana=' + inicioSemana);
 
-    Logger.log('seletivo_tryBuildInterviewDateTime_: atual=' + atual + ' | diff=' + diff);
+    if (!inicioSemana) return null;
 
-    d.setDate(d.getDate() + diff);
+    const d = new Date(inicioSemana);
+    d.setDate(d.getDate() + offset);
     d.setHours(hora, minuto, 0, 0);
 
     Logger.log('seletivo_tryBuildInterviewDateTime_: resultado=' + d);
@@ -479,4 +523,63 @@ function seletivo_tryBuildInterviewDateTime_(dia, faixa, baseDate) {
     console.error('seletivo_tryBuildInterviewDateTime_ erro:', e);
     return null;
   }
+}
+
+function seletivo_parseWeekStartDate_(semana, baseDate) {
+  try {
+    const texto = String(semana || '').trim();
+    if (!texto) return null;
+
+    Logger.log('seletivo_parseWeekStartDate_: texto=' + texto);
+
+    const textoNorm = texto
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase();
+
+    // Suporta:
+    // "Semana 23/03 a 29/03"
+    // "23/03 a 29/03"
+    // "Semana 23/03-29/03"
+    const m = textoNorm.match(/(\d{1,2})\/(\d{1,2})\s*(?:A|-|ATE)\s*(\d{1,2})\/(\d{1,2})/i);
+    if (!m) {
+      Logger.log('seletivo_parseWeekStartDate_: padrão de semana não reconhecido.');
+      return null;
+    }
+
+    const diaInicio = Number(m[1]);
+    const mesInicio = Number(m[2]) - 1;
+
+    let ano = new Date(baseDate).getFullYear();
+
+    // caso raro de virada de ano, ex: "Semana 29/12 a 04/01"
+    const diaFim = Number(m[3]);
+    const mesFim = Number(m[4]) - 1;
+    if (mesInicio === 11 && mesFim === 0) {
+      // mantém o ano do início
+    } else if (mesInicio === 0 && mesFim === 11) {
+      ano -= 1;
+    }
+
+    const d = new Date(ano, mesInicio, diaInicio);
+    d.setHours(0, 0, 0, 0);
+
+    Logger.log('seletivo_parseWeekStartDate_: resultado=' + d);
+    return d;
+  } catch (e) {
+    console.error('seletivo_parseWeekStartDate_ erro:', e);
+    return null;
+  }
+}
+
+function seletivo_testBuildInterviewDateTime_() {
+  const base = new Date();
+  Logger.log(
+    seletivo_tryBuildInterviewDateTime_(
+      'Semana 23/03 a 29/03',
+      'Segunda-feira',
+      '9h30-9h50',
+      base
+    )
+  );
 }
