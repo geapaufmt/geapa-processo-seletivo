@@ -216,12 +216,7 @@ function handleInterviewThread_(thread, shPublic, shLog, labelInbox, labelProces
     return;
   }
 
-  const rgaCandidato = fetchRGAByEmail_(
-    SETTINGS.formsResponsesSpreadsheetId,
-    SETTINGS.formsResponsesSheetName,
-    SETTINGS.formsRgaHeader,
-    fromEmail
-  ) || "";
+  const rgaCandidato = fetchRGAByEmailUsingRegistry_(fromEmail) || "";
 
   Logger.log('handleInterviewThread_: rgaCandidato=' + rgaCandidato);
 
