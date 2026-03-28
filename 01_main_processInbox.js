@@ -265,20 +265,21 @@ function handleInterviewThread_(thread, shPublic, shLog, labelInbox, labelProces
     messageId: msg.getId()
   });
 
-  const contatosSecretariaHtml = getSecretaryContactsHtml_();
+  const contatosSecretariaHtml =
+      GEAPA_CORE.coreGetCurrentContactsHtmlByEmailGroup('SECRETARIA');
 
-  const localEntrevista =
-    seletivo_getLocalEntrevistaByRgaOrEmail_(rgaCandidato, fromEmail) || 'A definir';
+    const localEntrevista =
+      seletivo_getLocalEntrevistaByRgaOrEmail_(rgaCandidato, fromEmail) || 'A definir';
 
-  const confirmHtml = fill_(SETTINGS.confirmHtml, {
-    NOME: fromName,
-    CODIGO: code20,
-    DIA: dayName || "—",
-    FAIXA: timeRange || "—",
-    SEMANA: weekTitle || "—",
-    LOCAL_ENTREVISTA: localEntrevista,
-    CONTATOS_SECRETARIA: contatosSecretariaHtml
-  });
+    const confirmHtml = fill_(SETTINGS.confirmHtml, {
+      NOME: fromName,
+      CODIGO: code20,
+      DIA: dayName || "—",
+      FAIXA: timeRange || "—",
+      SEMANA: weekTitle || "—",
+      LOCAL_ENTREVISTA: localEntrevista,
+      CONTATOS_SECRETARIA: contatosSecretariaHtml
+    });
 
   Logger.log('handleInterviewThread_: enviando confirmação.');
   reply_(thread, SETTINGS.confirmSubject, confirmHtml);
@@ -289,7 +290,6 @@ function handleInterviewThread_(thread, shPublic, shLog, labelInbox, labelProces
 
 function handleInterviewThreadError_(thread, err, labelInbox, labelError) {
   try {
-    // garante label de erro via Core e pega
     GEAPA_CORE.coreEnsureLabel(SETTINGS.errorLabel);
     const lblErr = GEAPA_CORE.coreGetLabel(SETTINGS.errorLabel);
 
@@ -298,13 +298,24 @@ function handleInterviewThreadError_(thread, err, labelInbox, labelError) {
   } catch (_) {}
 
   try {
-    const lastMsg = thread.getMessages().pop();
-    const fromEmail = extractEmail_(lastMsg.getFrom());
-    replyEmail_(
-      fromEmail,
-      SETTINGS.denySubject,
-      SETTINGS.denyHtml + `<p><small>Detalhe técnico: ${String(err && err.message || err)}</small></p>`
-    );
+    const msgs = thread.getMessages();
+    const lastMsg = msgs && msgs.length ? msgs[msgs.length - 1] : null;
+    if (!lastMsg) throw new Error('Thread sem mensagens.');
+
+    const fromRaw = lastMsg.getFrom();
+    const fromEmail = extractEmail_(fromRaw);
+    const fromName = extractName_(fromRaw) || 'candidato(a)';
+
+    const body = (lastMsg.getPlainBody() || '') + '\n' + (lastMsg.getBody() || '');
+    const m = body.toUpperCase().match(SETTINGS.codeRegex);
+    const code = m ? m[1].toUpperCase() : '—';
+
+    const htmlErro = fill_(SETTINGS.errorHtml, {
+      NOME: fromName,
+      CODIGO: code
+    });
+
+    replyEmail_(fromEmail, SETTINGS.errorSubject, htmlErro);
   } catch (_) {}
 
   console.error("Erro processando thread:", err);

@@ -94,6 +94,13 @@ const SETTINGS = Object.freeze({
     <p>Por favor, consulte a planilha de horários e responda com outro código.</p>
   `,
 
+  errorSubject: "Erro no processamento do agendamento",
+  errorHtml: `
+    <p>Olá, <b>{{NOME}}</b>!</p>
+    <p>Recebemos sua resposta com o código <b>{{CODIGO}}</b>, mas ocorreu um problema interno ao processar seu agendamento.</p>
+    <p>Por favor, aguarde alguns instantes e tente novamente. Se o problema persistir, entre em contato com a equipe de seleção.</p>
+  `,
+
   // Regex do código (B2, C12, AB3…)
   codeRegex: /([A-Z]{1,3}\d{1,4})/i,
 });
