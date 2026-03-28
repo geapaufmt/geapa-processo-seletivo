@@ -18,29 +18,28 @@
  * Este módulo é responsável por fornecer funções centrais para interação com o Gmail, facilitando o envio de e-mails, respostas a threads e marcação de mensagens. Ele é utilizado por outros módulos para garantir uma comunicação eficiente e segura por e-mail dentro do processo de desligamentos e suspensões. O código é estruturado para ser claro, modular e fácil de manter, com considerações para segurança e testes abrangentes.
  ***************************************/
 function reply_(thread, subject, htmlBody) {
-  thread.reply("", { subject, htmlBody, noReply: true });
+  GEAPA_CORE.coreReplyThreadHtml(thread, subject, htmlBody, { noReply: true });
 }
 
 function replyEmail_(to, subject, htmlBody) {
-  GmailApp.sendEmail(to, subject, "", { htmlBody });
+  GEAPA_CORE.coreSendHtmlEmail({
+    to: to,
+    subject: subject,
+    body: '',
+    htmlBody: htmlBody
+  });
 }
 
 function mark_(thread, labelIn, labelOut) {
-  if (labelIn) thread.removeLabel(labelIn);
-  if (labelOut) thread.addLabel(labelOut);
-  thread.markRead();
+  GEAPA_CORE.coreMarkThread(thread, labelIn, labelOut);
 }
 
 function extractEmail_(from) {
-  const m = String(from).match(/<([^>]+)>/);
-  return (m ? m[1] : String(from)).trim();
+  return GEAPA_CORE.coreExtractEmailAddress(from);
 }
 
 function extractName_(from) {
-  const m = String(from).match(/^"?([^"<]+)"?\s*</);
-  const raw = (m ? m[1] : String(from)).trim();
-  if (raw.includes("@")) return "";
-  return raw;
+  return GEAPA_CORE.coreExtractDisplayName(from);
 }
 
 /***************************************
@@ -148,30 +147,30 @@ function seletivo_sendPresenceCheckEmail_(reservaObj) {
 
     Logger.log('seletivo_sendPresenceCheckEmail_: enviando para ' + emailEntrevistador);
 
-    GmailApp.sendEmail(emailEntrevistador, subject, plainBody, {
-      htmlBody: htmlBody
+    const envio = GEAPA_CORE.coreSendTrackedEmail({
+      to: emailEntrevistador,
+      subject: subject,
+      body: plainBody,
+      htmlBody: htmlBody,
+      newerThanDays: 1,
+      maxThreads: 10,
+      sleepMs: 1200
     });
 
-    GEAPA_CORE.coreEnsureLabel(SETTINGS.presenceCheckLabel || 'Entrevistas/PresencaRespostas');
-    const lbl = GEAPA_CORE.coreGetLabel(SETTINGS.presenceCheckLabel || 'Entrevistas/PresencaRespostas');
+    const lbl = GEAPA_CORE.coreGetOrCreateLabel(
+      SETTINGS.presenceCheckLabel || 'Entrevistas/PresencaRespostas'
+    );
 
-    const query = 'in:sent to:' + emailEntrevistador + ' subject:"' + subject + '" newer_than:1d';
-    const threads = GmailApp.search(query, 0, 10);
-
-    if (threads && threads.length) {
-      const thread = threads[0];
-      if (lbl) thread.addLabel(lbl);
-
-      const lastMsg = thread.getMessages().slice(-1)[0];
-
-      return {
-        ok: true,
-        threadId: thread.getId(),
-        messageId: lastMsg ? lastMsg.getId() : ''
-      };
+    if (envio && envio.threadId && lbl) {
+      const thread = GmailApp.getThreadById(envio.threadId);
+      if (thread) thread.addLabel(lbl);
     }
 
-    return { ok: true, threadId: '', messageId: '' };
+    return {
+      ok: true,
+      threadId: envio && envio.threadId ? envio.threadId : '',
+      messageId: envio && envio.messageId ? envio.messageId : ''
+    };
   } catch (e) {
     console.error('seletivo_sendPresenceCheckEmail_ erro:', e);
     return { ok: false, reason: String(e) };
@@ -212,7 +211,12 @@ function seletivo_sendPostInterviewApprovedEmail_(rga, email, nome) {
       '<p>Fique atento(a) ao seu e-mail para eventuais orientações adicionais.</p>' +
       '<p>Atenciosamente,<br>Equipe de Seleção</p>';
 
-    GmailApp.sendEmail(email, subject, plainBody, { htmlBody });
+    GEAPA_CORE.coreSendHtmlEmail({
+      to: email,
+      subject: subject,
+      body: plainBody,
+      htmlBody: htmlBody
+    });
     Logger.log('seletivo_sendPostInterviewApprovedEmail_: enviado para ' + email);
     return true;
   } catch (e) {
@@ -235,7 +239,12 @@ function seletivo_sendPostInterviewRejectedEmail_(email, nome) {
       '<p>Informamos que, em razão do <b>não comparecimento à entrevista</b> do Processo Seletivo GEAPA, sua participação foi encerrada e você foi <b>desclassificado(a)</b> do processo.</p>' +
       '<p>Atenciosamente,<br>Equipe de Seleção</p>';
 
-    GmailApp.sendEmail(email, subject, plainBody, { htmlBody: htmlBody });
+    GEAPA_CORE.coreSendHtmlEmail({
+      to: email,
+      subject: subject,
+      body: plainBody,
+      htmlBody: htmlBody
+    });
 
     Logger.log('seletivo_sendPostInterviewRejectedEmail_: enviado para ' + email);
     return true;
