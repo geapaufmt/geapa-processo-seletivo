@@ -105,6 +105,15 @@ const SETTINGS = Object.freeze({
   codeRegex: /([A-Z]{1,3}\d{1,4})/i,
 });
 
+const SELETIVO_FIELD_ALIASES = Object.freeze({
+  OCUPACAO: Object.freeze([
+    "Ocupa\u00e7\u00e3o",
+    "Ocupacao",
+    "Cargo/Fun\u00e7\u00e3o",
+    "Cargo/Funcao"
+  ])
+});
+
 /**
  * Script B: placeholder quando bloco inativo (mantido do original)
  */

@@ -31,19 +31,24 @@ function getAvaliacaoHeaderMap_(sheet) {
 function seletivo_setAvaliacaoFieldByHeader_(rowNumber, headerName, value) {
   const sheet = seletivo_getAvaliacaoSheet_();
   const headers = getAvaliacaoHeaderMap_(sheet);
+  const aliases = Array.isArray(headerName) ? headerName : [headerName];
 
   const resolved = GEAPA_CORE.coreFindFirstExistingHeader(
     headers,
-    Array.isArray(headerName) ? headerName : [headerName],
+    aliases,
     { normalize: false }
   );
 
-  if (!resolved || !resolved.found) {
+  const resolvedHeaderName = (resolved && resolved.found)
+    ? resolved.headerName
+    : seletivo_findHeaderByAliases_(headers, aliases);
+
+  if (!resolvedHeaderName) {
     Logger.log('Cabecalho nao encontrado na Avaliacao: ' + headerName);
     return false;
   }
 
-  const wrote = GEAPA_CORE.coreWriteCellByHeader(sheet, rowNumber, headers, resolved.headerName, value, {
+  const wrote = GEAPA_CORE.coreWriteCellByHeader(sheet, rowNumber, headers, resolvedHeaderName, value, {
     normalize: false,
     oneBased: true
   });
@@ -114,6 +119,17 @@ function seletivo_buildAvaliacaoRowFromInscricao_(inscricaoObj) {
   };
 }
 
+function seletivo_setAvaliacaoOcupacao_(rowNumber, inscricaoObj) {
+  const ocupacao = seletivo_getOcupacaoFromRecord_(inscricaoObj);
+  if (!String(ocupacao || '').trim()) return false;
+
+  return seletivo_setAvaliacaoFieldByHeader_(
+    rowNumber,
+    seletivo_getOcupacaoAliases_(),
+    ocupacao
+  );
+}
+
 function seletivo_updateAvaliacaoCamposBasicos_(rowNumber, candidatoObj) {
   const camposPermitidos = [
     'Seletivo semestre',
@@ -138,6 +154,7 @@ function seletivo_upsertAvaliacaoFromInscricao_(inscricaoObj) {
 
   if (lookup.found) {
     seletivo_updateAvaliacaoCamposBasicos_(lookup.rowNumber, candidato);
+    seletivo_setAvaliacaoOcupacao_(lookup.rowNumber, inscricaoObj);
     Logger.log('Avaliacao atualizada na linha ' + lookup.rowNumber);
     return { action: 'updated', rowNumber: lookup.rowNumber };
   }
@@ -145,6 +162,7 @@ function seletivo_upsertAvaliacaoFromInscricao_(inscricaoObj) {
   const sheet = seletivo_getAvaliacaoSheet_();
   GEAPA_CORE.coreAppendObjectByHeaders(sheet, candidato, { headerRow: 1 });
   const rowNumber = sheet.getLastRow();
+  seletivo_setAvaliacaoOcupacao_(rowNumber, inscricaoObj);
 
   Logger.log('Nova linha criada na Avaliacao: ' + rowNumber);
   return { action: 'inserted', rowNumber: rowNumber };
