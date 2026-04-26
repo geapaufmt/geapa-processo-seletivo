@@ -165,3 +165,22 @@ O módulo já usa o core para:
 - o log privado é a fonte oficial das reservas;
 - a aba `SELETIVO_AVALIACAO` concentra o estado operacional do candidato após a verificação;
 - quando o core ganhar novas funções usadas pelo módulo, é necessário atualizar a versão da Library no Apps Script caso o projeto esteja preso em versão fixa.
+
+---
+
+## Compatibilidade de campos
+
+- `Ocupação` é o termo preferencial para novos textos, labels e integrações do módulo.
+- Durante a transição, o módulo aceita os cabeçalhos `Ocupação`, `Ocupacao`, `Cargo/Função` e `Cargo/Funcao`.
+- A sincronização da inscrição para `SELETIVO_AVALIACAO` resolve esses aliases por uma camada centralizada.
+- Ao escrever na avaliação, a ordem preferida é `Ocupação`/`Ocupacao`; bases legadas com `Cargo/Função`/`Cargo/Funcao` continuam funcionando sem renomeação física dos cabeçalhos.
+
+---
+
+## Changelog
+
+### 2026-04-24
+
+- Adicionada camada central de aliases para a transição semântica de `Cargo/Função` para `Ocupação`.
+- A escrita da ocupação em `SELETIVO_AVALIACAO` agora prefere cabeçalhos novos e preserva compatibilidade com cabeçalhos legados.
+- Documentada a estratégia de compatibilidade para a futura renomeação física dos cabeçalhos oficiais.
