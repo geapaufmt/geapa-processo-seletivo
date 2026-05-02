@@ -7,78 +7,82 @@
  ***************************************/
 
 /**
- * Trigger instalável de edição da planilha de log.
+ * Trigger instalavel de edicao da planilha de log.
  *
  * @param {GoogleAppsScript.Events.SheetsOnEdit} e
  */
 function seletivo_onEditLogRemarcacao(e) {
-  try {
-    seletivo_assertCore_();
+  return seletivo_runOperationalFlow_(
+    SELETIVO_OPERATIONAL.flows.REMARCACAO,
+    SELETIVO_OPERATIONAL.capabilities.SYNC,
+    {
+      executionType: seletivo_getExecutionTypeFromEvent_(e),
+      source: 'seletivo_onEditLogRemarcacao'
+    },
+    function(runtime) {
+      seletivo_assertCore_();
 
-    if (!e || !e.range) {
-      Logger.log('seletivo_onEditLogRemarcacao: evento sem range.');
-      return;
+      if (!e || !e.range) {
+        Logger.log('seletivo_onEditLogRemarcacao: evento sem range.');
+        return;
+      }
+
+      const sh = e.range.getSheet();
+      const targetSheet = GEAPA_CORE.coreGetSheetByKey(SETTINGS.privateLogKey);
+
+      if (!targetSheet) {
+        Logger.log('seletivo_onEditLogRemarcacao: targetSheet nao encontrada via key ' + SETTINGS.privateLogKey);
+        return;
+      }
+
+      if (sh.getSheetId() !== targetSheet.getSheetId()) {
+        Logger.log('seletivo_onEditLogRemarcacao: edicao fora da sheet alvo.');
+        return;
+      }
+
+      const row = e.range.getRow();
+      const col = e.range.getColumn();
+
+      if (row < 2) {
+        Logger.log('seletivo_onEditLogRemarcacao: edicao no cabecalho.');
+        return;
+      }
+
+      const lastCol = sh.getLastColumn();
+      const headers = sh.getRange(1, 1, 1, lastCol).getValues()[0]
+        .map(h => String(h || '').trim());
+
+      const statusHeader = 'Status reserva';
+      const statusIdx = headers.indexOf(statusHeader);
+
+      if (statusIdx < 0) {
+        throw new Error('Cabecalho "Status reserva" nao encontrado no log.');
+      }
+
+      if (col !== statusIdx + 1) {
+        Logger.log('seletivo_onEditLogRemarcacao: coluna editada nao e Status reserva.');
+        return;
+      }
+
+      const cellValueNow = String(sh.getRange(row, col).getDisplayValue() || '').trim();
+      const newValue = String(e.value ?? cellValueNow ?? '').trim().toLowerCase();
+      const targetValue = String(SETTINGS.remarcadaAntecipadamenteStatus || 'Remarcada antecipadamente')
+        .trim()
+        .toLowerCase();
+
+      Logger.log('seletivo_onEditLogRemarcacao: newValue=' + newValue + ' | targetValue=' + targetValue);
+
+      if (newValue !== targetValue) {
+        Logger.log('seletivo_onEditLogRemarcacao: status nao corresponde ao status de remarcacao.');
+        return;
+      }
+
+      seletivo_processRemarcacaoAntecipadaRow_(sh, row, headers, runtime);
     }
-
-    const sh = e.range.getSheet();
-    const targetSheet = GEAPA_CORE.coreGetSheetByKey(SETTINGS.privateLogKey);
-
-    if (!targetSheet) {
-      Logger.log('seletivo_onEditLogRemarcacao: targetSheet não encontrada via key ' + SETTINGS.privateLogKey);
-      return;
-    }
-
-    if (sh.getSheetId() !== targetSheet.getSheetId()) {
-      Logger.log('seletivo_onEditLogRemarcacao: edição fora da sheet alvo.');
-      return;
-    }
-
-    const row = e.range.getRow();
-    const col = e.range.getColumn();
-
-    if (row < 2) {
-      Logger.log('seletivo_onEditLogRemarcacao: edição no cabeçalho.');
-      return;
-    }
-
-    const lastCol = sh.getLastColumn();
-    const headers = sh.getRange(1, 1, 1, lastCol).getValues()[0]
-      .map(h => String(h || '').trim());
-
-    const statusHeader = 'Status reserva';
-    const statusIdx = headers.indexOf(statusHeader);
-
-    if (statusIdx < 0) {
-      throw new Error('Cabeçalho "Status reserva" não encontrado no log.');
-    }
-
-    if (col !== statusIdx + 1) {
-      Logger.log('seletivo_onEditLogRemarcacao: coluna editada não é Status reserva.');
-      return;
-    }
-
-    const cellValueNow = String(sh.getRange(row, col).getDisplayValue() || '').trim();
-    const newValue = String(e.value ?? cellValueNow ?? '').trim().toLowerCase();
-    const targetValue = String(SETTINGS.remarcadaAntecipadamenteStatus || 'Remarcada antecipadamente')
-      .trim()
-      .toLowerCase();
-
-    Logger.log('seletivo_onEditLogRemarcacao: newValue=' + newValue + ' | targetValue=' + targetValue);
-
-    if (newValue !== targetValue) {
-      Logger.log('seletivo_onEditLogRemarcacao: status não corresponde ao status de remarcação.');
-      return;
-    }
-
-    seletivo_processRemarcacaoAntecipadaRow_(sh, row, headers);
-
-  } catch (err) {
-    console.error('seletivo_onEditLogRemarcacao erro:', err);
-    throw err;
-  }
+  );
 }
 
-function seletivo_processRemarcacaoAntecipadaRow_(sh, row, headers) {
+function seletivo_processRemarcacaoAntecipadaRow_(sh, row, headers, runtime) {
   const lastCol = sh.getLastColumn();
   const rowValues = sh.getRange(row, 1, 1, lastCol).getValues()[0];
 
@@ -86,15 +90,15 @@ function seletivo_processRemarcacaoAntecipadaRow_(sh, row, headers) {
   const nomeIdx = headers.indexOf('Nome');
   const statusIdx = headers.indexOf('Status reserva');
 
-  if (emailIdx < 0) throw new Error('Coluna "E-mail" não encontrada no log.');
-  if (nomeIdx < 0) throw new Error('Coluna "Nome" não encontrada no log.');
+  if (emailIdx < 0) throw new Error('Coluna "E-mail" nao encontrada no log.');
+  if (nomeIdx < 0) throw new Error('Coluna "Nome" nao encontrada no log.');
 
   const email = String(rowValues[emailIdx] || '').trim();
   const nome = String(rowValues[nomeIdx] || '').trim();
   const status = statusIdx >= 0 ? String(rowValues[statusIdx] || '').trim() : '';
 
   if (!email) {
-    throw new Error('Linha ' + row + ': e-mail do candidato está vazio.');
+    throw new Error('Linha ' + row + ': e-mail do candidato esta vazio.');
   }
 
   Logger.log(
@@ -104,8 +108,16 @@ function seletivo_processRemarcacaoAntecipadaRow_(sh, row, headers) {
     ' | status=' + status
   );
 
+  if (!seletivo_canApplyEffect_(
+    runtime,
+    SELETIVO_OPERATIONAL.capabilities.EMAIL,
+    'reenvio inicial de agendamento por remarcacao'
+  )) {
+    return;
+  }
+
   const sentOk = seletivo_sendInitialSchedulingEmail_(email, nome);
   Logger.log('seletivo_processRemarcacaoAntecipadaRow_: resultado do envio=' + sentOk);
 
-  // Opcional: registrar um comentário simples na própria linha, se houver coluna apropriada no futuro.
+  // Opcional: registrar um comentario simples na propria linha, se houver coluna apropriada no futuro.
 }
