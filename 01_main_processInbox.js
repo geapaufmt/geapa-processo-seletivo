@@ -468,4 +468,6 @@ function seletivo_handlePresenceThread_(thread, labelPresence, runtime) {
     thread.markRead();
     if (labelPresence) thread.removeLabel(labelPresence);
   });
+  thread.markRead();
+  if (labelPresence) thread.removeLabel(labelPresence);
 }
